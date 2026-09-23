@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "functions": { "api/*.ts": { "maxDuration": 60 } }
+  "functions": {
+    "api/agent.ts": { "maxDuration": 60, "supportsCancellation": true, "includeFiles": "node_modules/openai/**" },
+    "api/tts.ts": { "maxDuration": 60, "supportsCancellation": true }
+  }
 }
