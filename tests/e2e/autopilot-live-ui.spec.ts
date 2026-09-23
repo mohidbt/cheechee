@@ -9,7 +9,6 @@ test('live Nebius decision plays and completes a transition in the UI', async ({
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
   await expect(page.getByText('Agent online', { exact: false })).toBeVisible();
-  await page.getByRole('button', { name: 'Controls' }).click();
   await page.getByRole('switch', { name: 'Autopilot' }).click();
   const now = page.getByRole('region', { name: 'Performance mixer' });
   await expect(now.getByText('On air')).toBeVisible({ timeout: 20_000 });

@@ -9,6 +9,7 @@ test('video fills first screen and controls remain available', async ({ page }) 
   expect(bounds?.height).toBe(900);
   await expect(page.getByRole('button', { name: 'Stop all' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Controls' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByText('BPM unknown')).toHaveCount(0);
   await expect(page.getByText('Start some music')).toBeInViewport();
   await expect(page.getByRole('button', { name: 'Hold to speak DJ command' })).toBeInViewport();
   await expect(page.getByPlaceholder('Play something upbeat…')).toBeInViewport();
@@ -19,7 +20,12 @@ test('video fills first screen and controls remain available', async ({ page }) 
   const controls = page.getByRole('button', { name: 'Controls' });
   await controls.click();
   await expect(controls).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#performance-tray')).toBeHidden();
+  await expect(page.locator('#performance-tray')).toHaveJSProperty('hidden', true);
+  expect(await page.locator('#performance-tray').boundingBox()).toBeNull();
+  expect((await page.locator('.stage-bottom').boundingBox())?.height).toBeLessThanOrEqual(45);
   await expect(page.getByRole('region', { name: 'DJ assistant' })).not.toBeInViewport();
+  await page.screenshot({ path: 'test-results/immersive-desktop-collapsed.png' });
   await controls.click();
   await expect(controls).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByRole('region', { name: 'DJ assistant' })).toBeInViewport();
@@ -32,6 +38,11 @@ test('video fills first screen and controls remain available', async ({ page }) 
   await page.getByText('Advanced controls', { exact: false }).click();
   await expect(page.getByRole('region', { name: 'Deck A', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Track library' })).toBeVisible();
+  const deckA = page.getByRole('region', { name: 'Deck A', exact: true });
+  await deckA.getByRole('button', { name: 'Load track' }).click();
+  await expect(deckA.getByText('Ready')).toBeVisible();
+  await deckA.getByRole('button', { name: 'Play' }).click();
+  await expect(page.getByText('140 BPM', { exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/immersive-below-fold.png', fullPage: true });
 });
 
@@ -44,10 +55,26 @@ test('mobile stage and touch controls', async ({ page }) => {
   const controls = page.getByRole('button', { name: 'Controls' });
   await controls.click();
   await expect(controls).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#performance-tray')).toBeHidden();
+  await expect(page.locator('#performance-tray')).toHaveJSProperty('hidden', true);
+  expect(await page.locator('#performance-tray').boundingBox()).toBeNull();
+  expect((await page.locator('.stage-bottom').boundingBox())?.height).toBeLessThanOrEqual(45);
   await expect(page.getByRole('region', { name: 'DJ assistant' })).not.toBeInViewport();
+  await page.screenshot({ path: 'test-results/immersive-mobile-collapsed.png' });
   await controls.click();
   await expect(page.getByRole('region', { name: 'DJ assistant' })).toBeInViewport();
   await expect(page.getByRole('button', { name: 'Hold to speak DJ command' })).toBeInViewport();
   await page.screenshot({ path: 'test-results/immersive-mobile-controls.png' });
+  await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390);
+});
+
+test('short mobile viewport closes to handle only', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 600 });
+  await page.goto('/');
+  const controls = page.getByRole('button', { name: 'Controls' });
+  await expect(controls).toHaveAttribute('aria-expanded', 'true');
+  await controls.click();
+  await expect(page.locator('#performance-tray')).toBeHidden();
+  expect((await page.locator('.stage-bottom').boundingBox())?.height).toBeLessThanOrEqual(45);
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390);
 });

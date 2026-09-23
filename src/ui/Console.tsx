@@ -139,6 +139,7 @@ export function Console({ state, tracks, engine, connected, services, busy, acti
   const [duration, setDuration] = useState(4);
   const [transitionTrack, setTransitionTrack] = useState('');
   const [trayPinned, setTrayPinned] = useState(true);
+  const [trayHovered, setTrayHovered] = useState(false);
   const [trayDismissed, setTrayDismissed] = useState(false);
   const [showMixer, setShowMixer] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -146,6 +147,7 @@ export function Console({ state, tracks, engine, connected, services, busy, acti
   const trayRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const musicPlaying = state.decks.A.status === 'playing' || state.decks.B.status === 'playing';
+  const trayOpen = trayPinned || (trayHovered && !trayDismissed);
   useEffect(() => {
     if (musicPlaying && !trayRef.current?.contains(document.activeElement)) setTrayPinned(false);
   }, [musicPlaying]);
@@ -160,9 +162,9 @@ export function Console({ state, tracks, engine, connected, services, busy, acti
     const reviewed = trackId ? demoCueSets[trackId]?.reviewedPulseGrid?.bpm : null;
     if (reviewed) return `${reviewed} BPM`;
     const estimated = trackId ? (analyses[trackId] || engine.getTrackAnalysis(trackId))?.estimatedTempo?.bpm : null;
-    return estimated ? `~${estimated} BPM` : 'BPM unknown';
+    return estimated ? `~${estimated} BPM` : null;
   };
-  const bpmLine = activeDeck ? bpmFor(activeDeck) : 'BPM unknown';
+  const bpmLine = activeDeck ? bpmFor(activeDeck) : null;
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const trimmed = text.trim();
@@ -179,7 +181,7 @@ export function Console({ state, tracks, engine, connected, services, busy, acti
       <VideoStage engine={engine} resetKey={videoResetKey} />
       <div className="stage-shade" aria-hidden="true" />
       <header className="stage-header">
-        <div className="stage-identity"><img className="stage-mark" src="/cheechee-mark.png" alt="" /><strong>Cheechee</strong><span className="stage-bpm">{bpmLine}</span></div>
+        <div className="stage-identity"><img className="stage-mark" src="/cheechee-mark.png" alt="" /><strong>Cheechee</strong>{bpmLine && <span className="stage-bpm">{bpmLine}</span>}</div>
         <div className="stage-actions-top">
           <button type="button" className="actions-toggle" aria-expanded={actionsOpen} aria-controls="live-actions" onClick={() => setActionsOpen(value => !value)}>cheechee's thoughts{busy ? <span className="working-dot" aria-label="Agent working" /> : null}</button>
           <button type="button" className="stop-all" onClick={onStopAll}>Stop all</button>
@@ -189,9 +191,9 @@ export function Console({ state, tracks, engine, connected, services, busy, acti
         <div className="activity-heading"><strong>cheechee's thoughts</strong><button type="button" aria-label="Close cheechee's thoughts" onClick={() => setActionsOpen(false)}>Close</button></div>
         <div className="activity-feed" aria-live="polite">{activities.length === 0 ? <p className="empty-copy">Actions will appear here.</p> : activities.slice(-12).reverse().map(item => <div className={`activity-item activity-${item.kind}`} key={item.id}><span className="activity-symbol" aria-hidden="true">{item.kind === 'tool' ? '⌘' : item.kind === 'error' ? '!' : item.kind === 'user' ? '›' : '•'}</span><div><div className="activity-main"><span>{item.text}</span>{item.status && <small className={`activity-status status-${item.status}`}>{item.status}</small>}</div>{item.detail && <details><summary>Details</summary><pre>{item.detail}</pre></details>}</div><time dateTime={new Date(item.time).toISOString()}>{new Date(item.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</time></div>)}</div>
       </aside>
-      <div ref={trayRef} className={`stage-bottom ${trayPinned ? 'is-pinned' : ''} ${trayDismissed ? 'is-dismissed' : ''} ${!musicPlaying ? 'is-idle' : ''} ${showMixer ? 'show-mixer' : ''}`} onPointerLeave={() => setTrayDismissed(false)} onFocusCapture={event => { if (!(event.target instanceof HTMLElement && event.target.classList.contains('tray-toggle'))) setTrayDismissed(false); }} onBlurCapture={event => { if (musicPlaying && !event.currentTarget.contains(event.relatedTarget)) setTrayPinned(false); }}>
-        <button type="button" className="tray-toggle" aria-expanded={trayPinned} aria-controls="performance-tray" onClick={() => { setTrayDismissed(trayPinned); setTrayPinned(value => !value); }}><span>Controls</span><span aria-hidden="true">{trayPinned ? '⌄' : '⌃'}</span></button>
-        <div id="performance-tray" className="performance-tray">
+      <div ref={trayRef} className={`stage-bottom ${trayOpen ? 'is-open' : ''} ${!musicPlaying ? 'is-idle' : ''} ${showMixer ? 'show-mixer' : ''}`} onPointerEnter={() => setTrayHovered(true)} onPointerLeave={() => { setTrayHovered(false); setTrayDismissed(false); }} onFocusCapture={event => { if (event.target instanceof HTMLElement && event.target.classList.contains('tray-toggle') && !trayDismissed && !trayPinned) setTrayPinned(true); }} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget)) { setTrayDismissed(false); if (musicPlaying) setTrayPinned(false); } }}>
+        <button type="button" className="tray-toggle" aria-expanded={trayOpen} aria-controls="performance-tray" onClick={() => { setTrayPinned(!trayOpen); setTrayDismissed(trayOpen); }}><span>Controls</span><span aria-hidden="true">{trayOpen ? '⌄' : '⌃'}</span></button>
+        <div id="performance-tray" className="performance-tray" hidden={!trayOpen} inert={!trayOpen}>
           <div className="stage-inputs">
             <section className="assistant-input" aria-label="DJ assistant"><div className="stage-input-heading"><div><strong>Start some music</strong><span>Ask for a song or mood</span></div>{speechToggle}</div>{voiceControls}<form className="command-form" onSubmit={submit}><input aria-label="DJ command" value={text} onChange={event => { onManualIntent(); setText(event.target.value); }} placeholder={agentReady ? 'Play something upbeat…' : 'Agent unavailable'} disabled={busy || !agentReady} /><button type="submit" disabled={busy || !agentReady || !text.trim()}>{busy ? 'Working' : 'Send'}</button></form></section>
             <section className="autopilot-control" aria-label="Autopilot"><div className="autopilot-top"><strong>Autopilot</strong><button type="button" role="switch" aria-label="Autopilot" aria-checked={autopilot.mode === 'running'} disabled={analyzing || busy} onClick={onAutopilotToggle}>{autopilot.mode === 'running' ? 'On' : 'Off'}</button></div><div className="autopilot-settings"><label>Direction<input aria-label="Autopilot direction" maxLength={500} value={objective} onChange={event => setObjective(event.target.value)} onBlur={() => onObjectiveChange(objective)} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></label><label>Change every<select aria-label="Time between changes" value={autopilot.changeIntervalSeconds} onChange={event => onChangeInterval(Number(event.target.value))}><option value={20}>20 seconds</option><option value={60}>60 seconds</option><option value={120}>120 seconds</option></select></label></div><p role="status">{autopilot.line}</p></section>

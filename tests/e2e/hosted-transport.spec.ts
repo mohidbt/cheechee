@@ -34,7 +34,6 @@ test('hosted HTTP manual tool changes real audio and performance video', async (
     ] } });
   });
   await openHosted(page);
-  await page.getByRole('button', { name: 'Controls' }).click();
   await page.getByRole('textbox', { name: 'DJ command' }).fill('Play Melodic');
   await page.getByRole('button', { name: 'Send' }).click();
   await expect.poll(() => request?.type).toBe('request');
@@ -58,7 +57,6 @@ test('hosted HTTP autonomous decision starts playback through local acceptance',
     } });
   });
   await openHosted(page);
-  await page.getByRole('button', { name: 'Controls' }).click();
   await page.getByRole('switch', { name: 'Autopilot' }).click();
   await expect.poll(() => request?.type).toBe('autonomy_request');
   await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('Melodic')).toBeVisible({ timeout: 15_000 });
@@ -87,7 +85,6 @@ test('hosted HTTP cancellation ignores a late autonomous response', async ({ pag
     } catch { /* The browser may have already aborted the request. */ }
   });
   await openHosted(page);
-  await page.getByRole('button', { name: 'Controls' }).click();
   await page.getByRole('switch', { name: 'Autopilot' }).click();
   await expect.poll(() => !!pending).toBe(true);
   await page.getByRole('button', { name: 'Stop all' }).click();

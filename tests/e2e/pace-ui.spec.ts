@@ -16,7 +16,6 @@ test('Autopilot pace setting reschedules one browser controller window', async (
   const pace = page.getByRole('combobox', { name: 'Time between changes' });
   await expect(pace).toHaveValue('20');
   await pace.selectOption('60');
-  await page.getByRole('button', { name: 'Controls' }).click();
   await page.getByRole('switch', { name: 'Autopilot' }).click();
   await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('On air')).toBeVisible({ timeout: 15_000 });
   expect(requests).toHaveLength(1);
