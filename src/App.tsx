@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CommitStrategy, useScribe } from '@elevenlabs/react';
 import { createAudioEngine } from './audio/engine';
 import { DJBridge, type BridgeEvent } from './bridge';
+import { AutopilotController, type AutopilotStatus } from './autopilot/controller';
+import { DEFAULT_CHANGE_INTERVAL_SECONDS, DEFAULT_OBJECTIVE, buildMusicalContext } from './autopilot/context';
 import { Console, type Activity } from './ui/Console';
 import { demoTracks } from '../shared/catalog';
-import type { AudioEngine, AudioTrack, Command, ServiceStatus } from '../shared/contracts';
+import type { AudioEngine, AudioTrack, Command, ServiceStatus, TrackAnalysis } from '../shared/contracts';
 import './voice.css';
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -16,15 +18,16 @@ type VoiceProps = {
   onError: (text: string) => void;
   stopRef: React.MutableRefObject<() => void>;
   cancelSpeech: () => void;
+  onStart: () => void;
 };
 
-function VoiceInput({ enabled, engine, onSubmit, onError, stopRef, cancelSpeech }: VoiceProps) {
+function VoiceInput({ enabled, engine, onSubmit, onError, stopRef, cancelSpeech, onStart }: VoiceProps) {
   const [held, setHeld] = useState(false);
   const [preview, setPreview] = useState('');
   const session = useRef<{ released: boolean; connected: boolean; segments: string[]; timer?: ReturnType<typeof setTimeout>; done: boolean } | null>(null);
   const connecting = useRef(false);
-  const callback = useRef({ onSubmit, onError });
-  callback.current = { onSubmit, onError };
+  const callback = useRef({ onSubmit, onError, onStart });
+  callback.current = { onSubmit, onError, onStart };
   const scribe = useScribe({
     modelId: 'scribe_v2_realtime', commitStrategy: CommitStrategy.MANUAL,
     onPartialTranscript: data => { if (session.current) setPreview(data.text); },
@@ -69,6 +72,7 @@ function VoiceInput({ enabled, engine, onSubmit, onError, stopRef, cancelSpeech 
 
   async function start() {
     if (!enabled || session.current || connecting.current) return;
+    callback.current.onStart();
     connecting.current = true;
     cancelSpeech();
     const current = { released: false, connected: false, segments: [] as string[], timer: undefined as ReturnType<typeof setTimeout> | undefined, done: false };
@@ -129,7 +133,14 @@ export default function App() {
   const [services, setServices] = useState<ServiceStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [analyses, setAnalyses] = useState<Record<string, TrackAnalysis | null>>({});
+  const [analyzing, setAnalyzing] = useState(false);
   const [speechOn, setSpeechOn] = useState(true);
+  const [autopilot, setAutopilot] = useState<AutopilotStatus>({ mode: 'off', phase: 'idle', objective: DEFAULT_OBJECTIVE, changeIntervalSeconds: DEFAULT_CHANGE_INTERVAL_SECONDS, line: 'Autopilot is off.', nextTrackId: null, secondsUntilNext: null });
+  const autopilotRef = useRef<AutopilotController | null>(null);
+  const queuedCommands = useRef<Array<{ command: Command; resolve: (result: Awaited<ReturnType<AudioEngine['execute']>>) => void }>>([]);
+  const queuedRequest = useRef<string | null>(null);
+  const queueGeneration = useRef(0);
   const bridgeRef = useRef<DJBridge | null>(null);
   const importedUrls = useRef<string[]>([]);
   const voiceStop = useRef<() => void>(() => {});
@@ -186,8 +197,24 @@ export default function App() {
         add({ id, kind: 'tool', text: `${event.index + 1}. ${event.result?.message || event.command.type.replaceAll('_', ' ')}`, detail: `apply_mix command ${event.index + 1}\n${JSON.stringify(event.command, null, 2)}${event.result ? `\nResult: ${JSON.stringify(event.result, null, 2)}` : ''}`, status: event.status });
       }
     };
-    const bridge = new DJBridge(engine, () => tracksRef.current, onEvent);
+    const bridge = new DJBridge(engine, () => tracksRef.current, onEvent, command => command.type === 'transition' && command.timing === 'next_cue' ? autopilotRef.current?.scheduleManualCue(command) || Promise.resolve({ ok: false, code: 'controller_unavailable', message: 'Cue scheduler is unavailable.' }) : engine.execute(command));
     bridgeRef.current = bridge;
+    const controller = new AutopilotController(engine, bridge, () => tracksRef.current, setAutopilot, trace => add({ kind: trace.status === 'failed' ? 'error' : 'system', text: trace.text, detail: `Correlation: ${trace.key}${trace.detail ? `\n${trace.detail}` : ''}`, status: trace.status }));
+    autopilotRef.current = controller;
+    const visibility = () => { if (document.visibilityState === 'hidden') { controller.cancelManualCue(); controller.pause('Page hidden. Resume Autopilot explicitly.'); } };
+    document.addEventListener('visibilitychange', visibility);
+    const drain = engine.subscribeLifecycle(event => {
+      if (event.type !== 'transition_completed') return;
+      const text = queuedRequest.current;
+      queuedRequest.current = null;
+      if (text) {
+        const context = autopilotRef.current?.getContext() || buildMusicalContext(engine.getState(), tracksRef.current, DEFAULT_OBJECTIVE, []);
+        if (!bridge.submit(text, context)) add({ kind: 'error', text: 'Queued manual request could not be sent.' });
+      }
+      const next = queuedCommands.current.splice(0);
+      const generation = queueGeneration.current;
+      void (async () => { for (const item of next) { if (generation !== queueGeneration.current) { item.resolve({ ok: false, code: 'cancelled', message: 'Action cancelled.' }); continue; } try { item.resolve(await engine.execute(item.command)); } catch (error) { item.resolve({ ok: false, code: 'execution_error', message: message(error) }); } } })();
+    });
     bridge.connect();
     let alive = true;
     const status = async () => {
@@ -200,6 +227,13 @@ export default function App() {
       alive = false;
       clearInterval(refresh);
       bridge.close();
+      controller.dispose();
+      document.removeEventListener('visibilitychange', visibility);
+      autopilotRef.current = null;
+      drain();
+      queuedCommands.current.splice(0).forEach(item => item.resolve({ ok: false, code: 'cancelled', message: 'Action cancelled.' }));
+      queuedRequest.current = null;
+      queueGeneration.current++;
       bridgeRef.current = null;
       unsubscribe(); observe();
       voiceStop.current();
@@ -210,16 +244,28 @@ export default function App() {
   }, [add, cancelSpeech, engine]);
 
   const submit = useCallback((text: string) => {
-    if (bridgeRef.current?.submit(text)) add({ kind: 'user', text });
+    autopilotRef.current?.pause('Paused for manual request.');
+    autopilotRef.current?.cancelManualCue();
+    if (engine.getState().transition) { queuedRequest.current = text; add({ kind: 'user', text }); add({ kind: 'system', text: 'Manual request queued until the current transition finishes.', status: 'scheduled' }); return; }
+    const context = autopilotRef.current?.getContext() || buildMusicalContext(engine.getState(), tracksRef.current, DEFAULT_OBJECTIVE, []);
+    if (bridgeRef.current?.submit(text, context)) add({ kind: 'user', text });
     else add({ kind: 'error', text: 'The agent is busy or disconnected.' });
-  }, [add]);
+  }, [add, engine]);
   const manual = useCallback(async (command: Command) => {
+    autopilotRef.current?.pause('Paused for manual control.');
+    autopilotRef.current?.cancelManualCue();
     try {
-      const result = await engine.execute(command);
+      const result = engine.getState().transition && command.type !== 'get_dj_state'
+        ? await new Promise<Awaited<ReturnType<AudioEngine['execute']>>>(resolve => { queuedCommands.current.push({ command, resolve }); add({ kind: 'system', text: 'Manual action queued until the current transition finishes.', status: 'scheduled' }); })
+        : command.type === 'transition' && command.timing === 'next_cue' ? await autopilotRef.current?.scheduleManualCue(command) || { ok: false, code: 'controller_unavailable', message: 'Cue scheduler is unavailable.' } : await engine.execute(command);
       add({ kind: result.ok ? 'system' : 'error', text: result.message, detail: JSON.stringify(command, null, 2), status: result.ok ? result.scheduled ? 'scheduled' : 'completed' : 'failed' });
     } catch (error) { add({ kind: 'error', text: message(error), detail: JSON.stringify(command, null, 2), status: 'failed' }); }
   }, [add, engine]);
   const stopAll = useCallback(() => {
+    autopilotRef.current?.stopAll();
+    queuedRequest.current = null;
+    queueGeneration.current++;
+    queuedCommands.current.splice(0).forEach(item => item.resolve({ ok: false, code: 'cancelled', message: 'Action cancelled by Stop all.' }));
     voiceStop.current();
     cancelSpeech();
     bridgeRef.current?.cancel();
@@ -238,9 +284,26 @@ export default function App() {
       next.push({ id: crypto.randomUUID(), title: file.name.replace(/\.[^.]+$/, '').slice(0, 150), artist: 'Local file', tags: [], energy: 'unknown', source: 'local', loop: false, url });
       imported++;
     }
-    if (imported) { tracksRef.current = next; setTracks(next); engine.setTracks(next); add({ kind: 'system', text: `Imported ${imported} local track${imported === 1 ? '' : 's'}.`, status: 'completed' }); }
+    if (imported) { tracksRef.current = next; setTracks(next); engine.setTracks(next); autopilotRef.current?.catalogueChanged(); add({ kind: 'system', text: `Imported ${imported} local track${imported === 1 ? '' : 's'}.`, status: 'completed' }); }
   }, [add, engine]);
 
+  const analyzeLibrary = useCallback(async () => {
+    if (analyzing || autopilotRef.current?.getStatus().mode === 'running') { add({ kind: 'error', text: 'Pause Autopilot before analyzing tracks.' }); return; }
+    setAnalyzing(true);
+    const catalogue = [...tracksRef.current];
+    let completed = 0;
+    for (const track of catalogue) {
+      if (autopilotRef.current?.getStatus().mode === 'running') break;
+      try {
+        const result = await engine.analyzeTrack(track.id);
+        setAnalyses(current => ({ ...current, [track.id]: result }));
+        completed++;
+      } catch (error) { add({ kind: 'error', text: `Analysis of ${track.title} failed: ${message(error)}` }); }
+    }
+    add({ kind: 'system', text: `Analyzed ${completed} track${completed === 1 ? '' : 's'}. BPM and beat offsets are estimates, not verified beats.`, status: 'completed' });
+    setAnalyzing(false);
+  }, [add, analyzing, engine]);
+
   const agentReady = connected && services?.agent === true && !busy;
-  return <Console state={state} tracks={tracks} engine={engine} connected={connected} services={services} busy={busy} activities={activities} onCommand={manual} onSubmit={submit} onStopAll={stopAll} onImport={importFiles} speechToggle={<button type="button" className="speech-toggle" aria-pressed={speechOn} onClick={() => { setSpeechOn(value => !value); cancelSpeech(); }}>{speechOn ? 'Voice reply on' : 'Voice reply off'}</button>} voiceControls={<VoiceInput enabled={agentReady && services?.speech === true} engine={engine} onSubmit={submit} onError={text => add({ kind: 'error', text })} stopRef={voiceStop} cancelSpeech={cancelSpeech} />} />;
+  return <Console state={state} tracks={tracks} engine={engine} connected={connected} services={services} busy={busy} activities={activities} analyses={analyses} analyzing={analyzing} onAnalyze={() => void analyzeLibrary()} autopilot={autopilot} onAutopilotToggle={() => { if (autopilot.mode === 'running') autopilotRef.current?.disable(); else if (!analyzing) { if (bridgeRef.current?.isManualBusy()) add({ kind: 'system', text: 'Wait for the current DJ request to finish before starting Autopilot.' }); else autopilotRef.current?.enable(); } }} onObjectiveChange={value => autopilotRef.current?.setObjective(value)} onChangeInterval={value => autopilotRef.current?.setChangeInterval(value)} onManualIntent={() => { autopilotRef.current?.pause('Paused for manual control.'); autopilotRef.current?.cancelManualCue(); }} onCommand={manual} onSubmit={submit} onStopAll={stopAll} onImport={importFiles} speechToggle={<button type="button" className="speech-toggle" aria-pressed={speechOn} onClick={() => { setSpeechOn(value => !value); cancelSpeech(); }}>{speechOn ? 'Voice reply on' : 'Voice reply off'}</button>} voiceControls={<VoiceInput enabled={agentReady && services?.speech === true} engine={engine} onSubmit={submit} onStart={() => { autopilotRef.current?.pause('Paused for voice control.'); autopilotRef.current?.cancelManualCue(); }} onError={text => add({ kind: 'error', text })} stopRef={voiceStop} cancelSpeech={cancelSpeech} />} />;
 }

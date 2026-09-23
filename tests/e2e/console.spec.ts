@@ -136,8 +136,74 @@ test('agent tool call reaches the browser mixer and acknowledges its actual stat
   await expect(page.getByText('Playing Melodic on deck A.', { exact: false }).first()).toBeVisible();
   const actions = page.getByRole('complementary', { name: 'Actions' });
   await expect(actions.getByText('Play Melodic with less bass')).toBeVisible();
-  await expect(actions.getByText('Tool details')).toHaveCount(4);
-  await actions.getByText('Tool details').first().click();
-  await expect(actions.locator('pre').first()).toContainText('Result:');
+  await expect(actions.locator('.activity-tool').getByText('Tool details')).toHaveCount(4);
+  await actions.locator('.activity-tool').getByText('Tool details').first().click();
+  await expect(actions.locator('.activity-tool pre').first()).toContainText('Result:');
   expect(errors).toEqual([]);
+});
+
+test('Autopilot starts from an acknowledged decision and manual input pauses it with current context', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/status', route => route.fulfill({ json: { agent: true, speech: false, tts: false, model: 'test-only' } }));
+  let acknowledgement: any;
+  let manualRequest: any;
+  let decisionCount = 0;
+  await page.routeWebSocket('**/ws', socket => {
+    socket.onMessage(raw => {
+      const message = JSON.parse(String(raw));
+      if (message.type === 'autonomy_request') {
+        decisionCount++;
+        socket.send(JSON.stringify({ type: 'dj_decision', requestId: message.requestId, decisionId: 'start-1', sessionId: message.sessionId, controlRevision: message.controlRevision, sourcePlaybackId: message.sourcePlaybackId, decision: { type: 'start', track_id: 'melodic', explanation: 'Starting with Melodic for a steady opening.' } }));
+      }
+      if (message.type === 'decision_result') acknowledgement = message;
+      if (message.type === 'request') { manualRequest = message; socket.send(JSON.stringify({ type: 'assistant_message', requestId: message.requestId, text: 'I hear you.' })); socket.send(JSON.stringify({ type: 'agent_status', requestId: message.requestId, status: 'idle' })); }
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Enable audio' }).click();
+  await page.getByRole('switch', { name: 'Autopilot' }).click();
+  await expect(page.getByRole('switch', { name: 'Autopilot' })).toHaveAttribute('aria-checked', 'true');
+  await expect.poll(() => acknowledgement?.result?.accepted).toBe(true);
+  await expect(page.getByRole('region', { name: 'Now playing' }).getByText('Melodic')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Now playing' }).getByText('On air')).toBeVisible();
+  const actions = page.getByRole('complementary', { name: 'Actions' });
+  await expect(actions.getByText('Agent explanation: Starting with Melodic for a steady opening.')).toBeVisible();
+  await expect(actions.getByText('Started melodic.')).toBeVisible();
+  await page.screenshot({ path: 'test-results/autopilot-ui.png', fullPage: true });
+  await page.getByRole('textbox', { name: 'DJ command' }).fill('Make it calmer');
+  await expect(page.getByRole('switch', { name: 'Autopilot' })).toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByRole('status').getByText('Paused for manual control.')).toBeVisible();
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect.poll(() => manualRequest?.context?.now?.trackId).toBe('melodic');
+  expect(manualRequest.context.now.playbackId).toBeTruthy();
+  expect(manualRequest.context.upcoming[0]).toMatchObject({ kind: 'loop_exit', provenance: 'manual', reviewed: true, alignment: 'reviewed_pulse_grid' });
+  expect(manualRequest.context.remainder.residenceSeconds).toBeNull();
+  await page.getByRole('button', { name: 'Stop all audio' }).click();
+  await expect(page.getByRole('region', { name: 'Now playing' }).getByText('On air')).toHaveCount(0);
+  expect(decisionCount).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test('Stop all drops a manual request queued during an active fade', async ({ page }) => {
+  await page.route('**/api/status', route => route.fulfill({ json: { agent: true, speech: false, tts: false, model: 'test-only' } }));
+  let requests = 0;
+  await page.routeWebSocket('**/ws', socket => { socket.onMessage(raw => { if (JSON.parse(String(raw)).type === 'request') requests++; }); });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Enable audio' }).click();
+  await page.getByText('Advanced controls', { exact: false }).click();
+  await loadAndPlay(page, 'A', 'Melodic');
+  await page.getByLabel('Next track').selectOption({ label: 'Loopy · Fupi' });
+  await page.getByLabel('Transition duration').selectOption('8');
+  await page.getByRole('button', { name: 'Start transition' }).click();
+  await expect(page.getByText('in progress')).toBeVisible();
+  await page.getByRole('textbox', { name: 'DJ command' }).fill('Play the next song');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByRole('complementary', { name: 'Actions' }).getByText('Manual request queued until the current transition finishes.')).toBeVisible();
+  expect(requests).toBe(0);
+  await page.getByRole('button', { name: 'Stop all audio' }).click();
+  await page.waitForTimeout(8500);
+  expect(requests).toBe(0);
+  await expect(deck(page, 'A').getByText('Stopped')).toBeVisible();
+  await expect(deck(page, 'B').getByText('Stopped')).toBeVisible();
 });

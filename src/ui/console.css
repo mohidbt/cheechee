@@ -42,3 +42,11 @@
 .advanced-controls .mixing-surface{border-top:1px solid #405167}
 @media(max-width:850px){.primary-grid{grid-template-columns:1fr}.primary-grid .agent-area{border-right:0;border-bottom:1px solid #405167}.actions-panel .activity-feed{height:190px}}
 @media(max-width:620px){.primary-grid .agent-area,.actions-panel{padding:20px 17px}.primary-grid .section-title strong{font-size:19px}.now-playing,.compact-shell>.library{padding-left:17px;padding-right:17px}.now-decks{grid-template-columns:1fr}.advanced-controls>summary{padding-left:17px;padding-right:17px}.now-deck{padding:10px}.now-time{font-size:9px}}
+.autopilot-control{margin-top:22px;padding:16px 18px;border:1px solid #526a82;border-radius:5px;background:#192c40}
+.autopilot-top{display:flex;align-items:center;justify-content:space-between;gap:12px}.autopilot-top strong{font-size:14px}.autopilot-top button{min-width:54px;padding:6px 10px;border:1px solid #65859c;border-radius:3px;background:#31495f;color:#eaf4fb;font-size:11px;font-weight:700}.autopilot-top button[aria-checked=true]{background:#6ecba6;border-color:#6ecba6;color:#13291e}
+.autopilot-control label{display:block;margin-top:13px;color:#9fb3c6;font-size:11px}.autopilot-control input,.autopilot-control select{display:block;width:100%;height:36px;margin-top:5px;padding:0 9px;border:1px solid #557087;border-radius:3px;background:#102238;color:#eef4fb;font-size:11px}.autopilot-control p{margin:10px 0 0;color:#bad2e2;font-size:11px;line-height:1.4}
+@media(max-width:620px){.autopilot-control{padding:13px}}
+.activity-status.status-accepted,.activity-status.status-ready,.activity-status.status-started{color:#84d3a9}
+.activity-status.status-preparing{color:#9dc4db}
+.activity-status.status-fallback{color:#ffcd7d}
+.activity-status.status-cancelled{color:#9aacbf}
