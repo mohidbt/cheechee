@@ -16,7 +16,10 @@ test('manual mixing surface plays, processes, transitions, and stops audio', asy
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
-  await expect(page.getByText('Agent commands need', { exact: false }).or(page.getByText('NEBIUS_API_KEY', { exact: false })).or(page.getByText('Agent server disconnected', { exact: false }))).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Actions' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Now playing' })).toBeVisible();
+  await page.getByText('Advanced controls', { exact: false }).click();
+  await expect(page.getByRole('region', { name: 'DJ assistant' })).toBeVisible();
   await page.getByRole('button', { name: 'Enable audio' }).click();
   await expect(page.getByText('Sound is off')).toBeHidden();
   await loadAndPlay(page, 'A', 'Melodic');
@@ -78,6 +81,7 @@ test('small screen remains usable and accepts a local track', async ({ page }) =
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390);
+  await expect(page.getByText('Advanced controls', { exact: false })).toBeVisible();
   await page.screenshot({ path: 'test-results/console-mobile.png', fullPage: true });
   await page.locator('input[type=file]').setInputFiles('public/audio/melodicedm.wav');
   await expect(page.getByRole('region', { name: 'Track library' }).getByText('melodicedm', { exact: true })).toBeVisible();
@@ -112,6 +116,7 @@ test('agent tool call reaches the browser mixer and acknowledges its actual stat
   });
 
   await page.goto('/');
+  await page.getByText('Advanced controls', { exact: false }).click();
   await expect(page.getByText('Agent online', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Enable audio' }).click();
   await page.getByRole('textbox', { name: 'DJ command' }).fill('Play Melodic with less bass');
@@ -129,5 +134,10 @@ test('agent tool call reaches the browser mixer and acknowledges its actual stat
   await expect(deck(page, 'A').getByLabel('Deck A low EQ')).toHaveValue('-8');
   await expect(deck(page, 'A').getByRole('button', { name: 'High pass' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Playing Melodic on deck A.', { exact: false }).first()).toBeVisible();
+  const actions = page.getByRole('complementary', { name: 'Actions' });
+  await expect(actions.getByText('Play Melodic with less bass')).toBeVisible();
+  await expect(actions.getByText('Tool details')).toHaveCount(4);
+  await actions.getByText('Tool details').first().click();
+  await expect(actions.locator('pre').first()).toContainText('Result:');
   expect(errors).toEqual([]);
 });
