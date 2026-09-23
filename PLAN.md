@@ -1,4 +1,4 @@
-# AI DJ demo implementation plan
+# Cheechee implementation plan
 
 Status: local implementation integrated. Typecheck, production build, three backend tests, and three Chrome Playwright checks pass. Browser checks cover manual audio, waveform activity, three transition presets, stop-all, mobile layout, local import, and a deterministic WebSocket command through the real audio engine. Nebius inference, ElevenLabs speech, microphone access, and latency remain unverified because credentials are absent.
 Prepared: 2026-09-23.

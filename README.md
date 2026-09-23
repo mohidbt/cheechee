@@ -1,4 +1,4 @@
-# Afterhours AI DJ
+# Cheechee
 
 A local two-deck DJ console. The browser plays and mixes audio with Tone.js. A Nebius-backed LangChain agent can control it through one `apply_mix` tool. ElevenLabs provides optional push-to-talk transcription and spoken replies. Manual playback works without any provider credentials.
 
