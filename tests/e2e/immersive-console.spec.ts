@@ -8,11 +8,14 @@ test('video fills first screen and controls remain available', async ({ page }) 
   const bounds = await stage.boundingBox();
   expect(bounds?.height).toBe(900);
   await expect(page.getByRole('button', { name: 'Stop all' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Controls' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Controls' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByText('Start some music')).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Hold to speak DJ command' })).toBeInViewport();
+  await expect(page.getByPlaceholder('Play something upbeat…')).toBeInViewport();
+  await expect(page.getByRole('link', { name: 'View Cheechee on GitHub' })).toHaveAttribute('href', 'https://github.com/mohidbt/cheechee');
   await expect(page.getByRole('region', { name: 'Track library' })).not.toBeInViewport();
   await page.screenshot({ path: 'test-results/immersive-desktop.png' });
 
-  await page.getByRole('button', { name: 'Controls' }).click();
   await expect(page.getByRole('region', { name: 'DJ assistant' })).toBeInViewport();
   await expect(page.getByLabel('Performance deck A low EQ')).toBeVisible();
   await page.getByLabel('Performance deck A low EQ').focus();
@@ -32,8 +35,8 @@ test('mobile stage and touch controls', async ({ page }) => {
   const stage = page.getByRole('region', { name: 'DJ performance' });
   expect((await stage.boundingBox())?.height).toBe(844);
   await page.screenshot({ path: 'test-results/immersive-mobile.png' });
-  await page.getByRole('button', { name: 'Controls' }).click();
-  await expect(page.getByRole('region', { name: 'DJ assistant' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'DJ assistant' })).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Hold to speak DJ command' })).toBeInViewport();
   await page.screenshot({ path: 'test-results/immersive-mobile-controls.png' });
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390);
 });

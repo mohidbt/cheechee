@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { emptyState } from '../shared/contracts';
-import { CLIP_FILES, clipForLifecycle, clipForLoad, clipForMixerChange, videoUrl } from '../src/video/clips';
+import { CLIP_FILES, clipForLifecycle, clipForLoad, clipForMixerChange, idleClipForState, videoUrl } from '../src/video/clips';
 
 describe('performance clip mapping', () => {
   it('only references the copied real clips', () => {
-    expect(Object.keys(CLIP_FILES)).toHaveLength(17);
+    expect(Object.keys(CLIP_FILES)).toHaveLength(18);
+    expect(videoUrl('idle')).toBe('/video/idle.mp4');
     expect(videoUrl('idle_hype')).toBe('/video/idle_hype.mp4');
-    expect(Object.values(CLIP_FILES)).not.toContain('idle.mp4');
     expect(Object.values(CLIP_FILES)).not.toContain('filter_sweep.mp4');
   });
 
   it('uses actual deck identity and cue position for playback', () => {
     const state = emptyState();
+    state.decks.B.status = 'playing';
     state.decks.B.position = 1.25;
     expect(clipForLifecycle({type:'started', deck:'B', trackId:'next', playbackId:'one', audioTime:1}, state)).toBe('needle_drop_b');
     state.decks.B.position = 0;
@@ -26,6 +27,10 @@ describe('performance clip mapping', () => {
     expect(clipForLoad('A', false)).toBe('load_a');
     expect(clipForLoad('B', true)).toBe('swap_b');
     const first = emptyState(), next = emptyState();
+    expect(idleClipForState(first)).toBe('idle');
+    next.decks.A.status = 'playing';
+    expect(idleClipForState(next)).toBe('idle_hype');
+    expect(clipForMixerChange(first, {...first, crossfader: 0.5})).toBeNull();
     next.decks.A.eq.low = -8;
     expect(clipForMixerChange(first, next)).toBe('eq_low');
     next.decks.A.eq.low = 0; next.decks.B.eq.high = 2;

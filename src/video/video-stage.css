@@ -19,7 +19,8 @@
   object-position: center center;
 }
 
-.video-stage-idle { z-index: 1; }
+.video-stage-idle { z-index: 1; opacity: 0; }
+.video-stage-idle.is-active { opacity: 1; }
 .video-stage-action {
   z-index: 2;
   opacity: 0;

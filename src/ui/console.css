@@ -228,3 +228,30 @@
 .performance-app .advanced-controls .style-grid button.selected,.performance-app .advanced-controls .filter-modes button.selected{background:#ab91bc;border-color:#ab91bc;color:#171a22}
 .performance-app .advanced-controls .transition-go{background:#ded9d2;color:#171a22}
 .performance-app .advanced-controls .track-title{font-size:clamp(23px,2vw,32px)}
+/* The first visit starts with a voice or text request. */
+.stage-input-heading>div{display:flex;align-items:baseline;gap:12px;min-width:0}
+.stage-input-heading>div span{color:#c9c2cc;font-size:11px}
+.performance-app .assistant-input .voice-input{margin-top:12px;min-height:44px}
+.performance-app .assistant-input .mic-button{min-height:44px;padding:10px 18px;border-color:#bda5c9;background:#a78db8;color:#161820;font-size:13px;font-weight:700}
+.performance-app .assistant-input .mic-button:hover:not(:disabled){background:#c0abd0}
+.performance-app .assistant-input .mic-button.is-held{background:#c36f7b;border-color:#f2aab3;color:#fff}
+.performance-app .assistant-input .voice-preview{color:#c9c2cc;font-size:11px}
+.performance-app .assistant-input .command-form{margin-top:12px}
+.app-repo-link{max-width:1540px;margin:24px auto 0;padding-top:15px;border-top:1px solid #ede9df25;font-size:12px}
+.app-repo-link a{color:#c5b5d0;text-decoration:underline;text-underline-offset:3px}
+.app-repo-link a:hover{color:#ede9df}
+@media(max-width:520px){
+ .stage-input-heading>div{align-items:flex-start;flex-direction:column;gap:2px}
+ .performance-app .assistant-input .voice-input{align-items:flex-start;flex-direction:column;gap:6px}
+ .performance-app .assistant-input .mic-button{width:100%}
+}
+.mixer-reveal{display:none}
+@media(max-width:520px){
+ .stage-bottom.is-idle:not(.show-mixer) .performance-mixer{display:none}
+ .stage-bottom.is-idle:not(.show-mixer) .autopilot-settings,
+ .stage-bottom.is-idle:not(.show-mixer) .autopilot-control>p{display:none}
+ .stage-bottom.is-idle:not(.show-mixer) .autopilot-control:focus-within .autopilot-settings,
+ .stage-bottom.is-idle:not(.show-mixer) .autopilot-control:focus-within>p{display:grid}
+ .mixer-reveal{display:block;width:100%;padding:10px 12px;border:0;border-top:1px solid #ede9df28;background:transparent;color:#c9c2cc;text-align:left;font-size:11px}
+ .mixer-reveal:hover{color:#fff}
+}

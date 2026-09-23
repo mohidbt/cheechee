@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AudioEngine, DeckId, DJState } from '../../shared/contracts';
-import { clipForLifecycle, clipForLoad, clipForMixerChange, IDLE_CLIP, videoUrl, type VideoClipId } from './clips';
+import { clipForLifecycle, clipForLoad, clipForMixerChange, hasPlayingDeck, IDLE_CLIP, idleClipForState, QUIET_IDLE_CLIP, videoUrl, type VideoClipId } from './clips';
 import './video-stage.css';
 
 type Slot = { clip: VideoClipId; token: number } | null;
@@ -11,10 +11,12 @@ export function VideoStage({ engine, resetKey }: VideoStageProps) {
   const [slots, setSlots] = useState<[Slot, Slot]>([null, null]);
   const [visible, setVisible] = useState<{slot: 0 | 1; token: number} | null>(null);
   const [failed, setFailed] = useState(false);
+  const [idleClip, setIdleClip] = useState(() => idleClipForState(engine.getState()));
+  const idleClipRef = useRef(idleClip);
   const [reducedMotion, setReducedMotion] = useState(() => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const reducedMotionRef = useRef(reducedMotion);
   reducedMotionRef.current = reducedMotion;
-  const idleRef = useRef<HTMLVideoElement>(null);
+  const idleRefs = useRef<Record<typeof QUIET_IDLE_CLIP | typeof IDLE_CLIP, HTMLVideoElement | null>>({idle: null, idle_hype: null});
   const actionRefs = useRef<[HTMLVideoElement | null, HTMLVideoElement | null]>([null, null]);
   const sequence = useRef(0);
   const pending = useRef<{slot: 0 | 1; token: number} | null>(null);
@@ -28,6 +30,11 @@ export function VideoStage({ engine, resetKey }: VideoStageProps) {
     knobTimer.current = null;
   }
 
+  function setIdleMode(state: DJState) {
+    const next = idleClipForState(state);
+    if (idleClipRef.current !== next) { idleClipRef.current = next; setIdleClip(next); }
+  }
+
   function showIdle() {
     sequence.current++;
     clearKnob();
@@ -36,11 +43,14 @@ export function VideoStage({ engine, resetKey }: VideoStageProps) {
     actionRefs.current.forEach(video => video?.pause());
     setSlots([null, null]);
     setVisible(null);
-    if (!reducedMotionRef.current) void idleRef.current?.play().catch(() => setFailed(true));
+    if (!reducedMotionRef.current) void idleRefs.current[idleClipRef.current as typeof QUIET_IDLE_CLIP | typeof IDLE_CLIP]?.play().catch(() => setFailed(true));
   }
 
   function requestClip(clip: VideoClipId) {
-    if (clip === IDLE_CLIP) { showIdle(); return; }
+    if (clip === IDLE_CLIP || clip === QUIET_IDLE_CLIP) { showIdle(); return; }
+    const state = engine.getState();
+    setIdleMode(state);
+    if (!hasPlayingDeck(state)) return;
     clearKnob();
     const slot: 0 | 1 = visibleRef.current?.slot === 0 ? 1 : 0;
     const token = ++sequence.current;
@@ -71,7 +81,7 @@ export function VideoStage({ engine, resetKey }: VideoStageProps) {
       pending.current = null;
       visibleRef.current = {slot, token};
       setVisible({slot, token});
-      idleRef.current?.pause();
+      idleRefs.current[idleClipRef.current as typeof QUIET_IDLE_CLIP | typeof IDLE_CLIP]?.pause();
       if (old && old.slot !== slot) {
         actionRefs.current[old.slot]?.pause();
         setSlots(current => {
@@ -93,9 +103,12 @@ export function VideoStage({ engine, resetKey }: VideoStageProps) {
   }, []);
 
   useEffect(() => {
-    if (reducedMotion) idleRef.current?.pause();
-    else if (!visibleRef.current) void idleRef.current?.play().catch(() => setFailed(true));
-  }, [reducedMotion]);
+    const active = idleRefs.current[idleClip as typeof QUIET_IDLE_CLIP | typeof IDLE_CLIP];
+    const other = idleRefs.current[idleClip === QUIET_IDLE_CLIP ? IDLE_CLIP : QUIET_IDLE_CLIP];
+    other?.pause();
+    if (reducedMotion || visibleRef.current) active?.pause();
+    else void active?.play().catch(() => setFailed(true));
+  }, [idleClip, reducedMotion]);
 
   useEffect(() => {
     let previous = engine.getState();
@@ -103,6 +116,10 @@ export function VideoStage({ engine, resetKey }: VideoStageProps) {
     const loadingOrigins: Partial<Record<DeckId, string | null>> = {};
     const stateUnsubscribe = engine.subscribe(() => {
       const next = engine.getState();
+      const wasPlaying = hasPlayingDeck(previous);
+      const isPlaying = hasPlayingDeck(next);
+      setIdleMode(next);
+      if (wasPlaying && !isPlaying) showIdle();
       if (next.transition || previous.transition) {
         clearKnob();
         mixerAnchor = next;
@@ -121,7 +138,7 @@ export function VideoStage({ engine, resetKey }: VideoStageProps) {
       previous = next;
     });
     const lifecycleUnsubscribe = engine.subscribeLifecycle(event => {
-      if (event.type === 'ended' && event.reason === 'stop_all') { showIdle(); return; }
+      if (event.type === 'ended' && event.reason === 'stop_all') { idleClipRef.current = QUIET_IDLE_CLIP; setIdleClip(QUIET_IDLE_CLIP); showIdle(); return; }
       if (event.type === 'started' || event.type === 'transition_started' || event.type === 'ended') {
         const key = 'transitionId' in event ? `${event.type}:${event.transitionId}` : `${event.type}:${event.playbackId}:${event.type === 'ended' ? event.reason : ''}`;
         if (seen.current.has(key)) return;
@@ -138,9 +155,10 @@ export function VideoStage({ engine, resetKey }: VideoStageProps) {
 
   useEffect(() => { if (resetKey !== undefined) showIdle(); }, [resetKey]);
 
-  return <div className="video-stage" aria-label="DJ performance video" data-active-clip={visible ? slots[visible.slot]?.clip : IDLE_CLIP} data-pending-clip={pending.current ? slots[pending.current.slot]?.clip : undefined}>
+  return <div className="video-stage" aria-label="DJ performance video" data-active-clip={visible ? slots[visible.slot]?.clip : idleClip} data-pending-clip={pending.current ? slots[pending.current.slot]?.clip : undefined}>
     <img className="video-stage-poster" src="/video/idle-poster.jpg" alt="Cheechee DJ at the decks" />
-    <video ref={idleRef} className="video-stage-media video-stage-idle" src={videoUrl(IDLE_CLIP)} muted playsInline loop autoPlay={!reducedMotion} preload="auto" poster="/video/idle-poster.jpg" aria-hidden="true" onError={() => setFailed(true)} />
+    <video ref={element => { idleRefs.current.idle = element; }} className={`video-stage-media video-stage-idle${idleClip === QUIET_IDLE_CLIP ? ' is-active' : ''}`} src={videoUrl(QUIET_IDLE_CLIP)} muted playsInline loop autoPlay={!reducedMotion && idleClip === QUIET_IDLE_CLIP} preload="auto" aria-hidden="true" onError={() => setFailed(true)} />
+    <video ref={element => { idleRefs.current.idle_hype = element; }} className={`video-stage-media video-stage-idle${idleClip === IDLE_CLIP ? ' is-active' : ''}`} src={videoUrl(IDLE_CLIP)} muted playsInline loop autoPlay={!reducedMotion && idleClip === IDLE_CLIP} preload="auto" aria-hidden="true" onError={() => setFailed(true)} />
     {slots.map((item, index) => item && <video key={`${index}:${item.token}`} ref={element => { actionRefs.current[index as 0 | 1] = element; }} className={`video-stage-media video-stage-action${visible?.slot === index && visible.token === item.token ? ' is-visible' : ''}`} src={videoUrl(item.clip)} muted playsInline preload="auto" aria-hidden="true" onCanPlay={() => void activate(index as 0 | 1, item.token)} onEnded={() => { if (visibleRef.current?.token === item.token && !pending.current) showIdle(); }} onError={() => { if (pending.current?.token === item.token) { showIdle(); setFailed(true); } else if (visibleRef.current?.token === item.token) { if (!pending.current) showIdle(); setFailed(true); } }} />)}
     {failed && <span className="video-stage-fallback">Performance video unavailable</span>}
   </div>;

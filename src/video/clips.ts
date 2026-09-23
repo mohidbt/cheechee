@@ -1,6 +1,7 @@
 import type { AudioLifecycleEvent, DeckId, DJState } from '../../shared/contracts';
 
 export const CLIP_FILES = {
+  idle: 'idle.mp4',
   idle_hype: 'idle_hype.mp4',
   load_a: 'load_a.mp4', load_b: 'load_b.mp4',
   swap_a: 'swap_a.mp4', swap_b: 'swap_b.mp4',
@@ -13,8 +14,11 @@ export const CLIP_FILES = {
 } as const;
 
 export type VideoClipId = keyof typeof CLIP_FILES;
-export const IDLE_CLIP: VideoClipId = 'idle_hype';
+export const QUIET_IDLE_CLIP = 'idle' as const;
+export const IDLE_CLIP = 'idle_hype' as const;
 export const videoUrl = (clip: VideoClipId) => `/video/${CLIP_FILES[clip]}`;
+export const hasPlayingDeck = (state: DJState) => state.decks.A.status === 'playing' || state.decks.B.status === 'playing';
+export const idleClipForState = (state: DJState): VideoClipId => hasPlayingDeck(state) ? IDLE_CLIP : QUIET_IDLE_CLIP;
 const onDeck = (prefix: string, deck: DeckId) => `${prefix}_${deck.toLowerCase()}` as VideoClipId;
 
 export function clipForLoad(deck: DeckId, replacing: boolean): VideoClipId {
@@ -22,6 +26,7 @@ export function clipForLoad(deck: DeckId, replacing: boolean): VideoClipId {
 }
 
 export function clipForLifecycle(event: AudioLifecycleEvent, state: DJState): VideoClipId | null {
+  if (!hasPlayingDeck(state)) return null;
   if (event.type === 'transition_started') return onDeck('crossfade_to', event.to);
   if (event.type === 'started') {
     if (state.transition) return null;
@@ -33,6 +38,7 @@ export function clipForLifecycle(event: AudioLifecycleEvent, state: DJState): Vi
 
 /** Only manual mixer changes animate here; transition ramps are lifecycle driven. */
 export function clipForMixerChange(previous: DJState, next: DJState): VideoClipId | null {
+  if (!hasPlayingDeck(next)) return null;
   if (previous.transition || next.transition) return null;
   if (Math.abs(next.crossfader - previous.crossfader) >= 0.04) return onDeck('crossfade_to', next.crossfader > previous.crossfader ? 'B' : 'A');
   for (const deck of ['A', 'B'] as const) {

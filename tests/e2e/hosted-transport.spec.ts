@@ -94,6 +94,6 @@ test('hosted HTTP cancellation ignores a late autonomous response', async ({ pag
   release?.();
   await page.waitForTimeout(400);
   await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('On air')).toHaveCount(0);
-  await expect(page.getByLabel('DJ performance video')).toHaveAttribute('data-active-clip', 'idle_hype');
+  await expect(page.getByLabel('DJ performance video')).toHaveAttribute('data-active-clip', 'idle');
   await expect(page.getByRole('switch', { name: 'Autopilot' })).toHaveAttribute('aria-checked', 'false');
 });
