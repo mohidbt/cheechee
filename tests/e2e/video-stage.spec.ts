@@ -11,9 +11,9 @@ test('filmed DJ follows real audio execution and Stop all returns to idle', asyn
   await expect(idle).toHaveJSProperty('playsInline', true);
   await expect.poll(() => idle.evaluate(video => (video as HTMLVideoElement).currentTime)).toBeGreaterThan(0);
 
-  await page.getByText('Advanced controls', {exact:false}).click();
-  const deckA = page.getByRole('region', {name:'Deck A'});
-  await deckA.getByLabel('Track to load on deck A').selectOption({label:'Melodic'});
+  await expect(page.locator('.advanced-controls')).toHaveAttribute('open', '');
+  const deckA = page.getByRole('region', {name:'Deck A', exact:true});
+  await deckA.getByLabel('Track to load on deck A').selectOption({label:'EDM or something'});
   await deckA.getByRole('button', {name:'Load track'}).click();
   await expect(stage).toHaveAttribute('data-active-clip', 'idle', {timeout:10_000});
   await expect(stage).not.toHaveAttribute('data-pending-clip', 'load_a');
@@ -25,7 +25,7 @@ test('filmed DJ follows real audio execution and Stop all returns to idle', asyn
   await page.getByLabel('Performance deck A low EQ').blur();
   await expect(stage).toHaveAttribute('data-active-clip', 'eq_low', {timeout:10_000});
 
-  await page.getByLabel('Next track').selectOption({label:'Loopy · Fupi'});
+  await page.getByLabel('Next track').selectOption({label:'Im Running Away · Play House'});
   await page.getByLabel('Transition duration').selectOption('2');
   await page.route('**/video/crossfade_to_b.mp4', async route => {
     await new Promise(resolve => setTimeout(resolve, 700));

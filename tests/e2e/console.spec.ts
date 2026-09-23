@@ -18,7 +18,7 @@ test('manual mixing surface plays, processes, transitions, and stops audio', asy
   await page.goto('/');
   await page.getByRole('button', { name: "cheechee's thoughts" }).click();
   await expect(page.getByRole('complementary', { name: "cheechee's thoughts" })).toBeVisible();
-  await page.getByText('Advanced controls', { exact: false }).click();
+  await expect(page.locator('.advanced-controls')).toHaveAttribute('open', '');
   await expect(page.getByRole('region', { name: 'DJ assistant' })).toBeVisible();
   await loadAndPlay(page, 'A', 'EDM or something');
   await expect.poll(async () => Number(await deck(page, 'A').getByRole('progressbar').getAttribute('aria-valuenow'))).toBeGreaterThan(0);
@@ -114,7 +114,7 @@ test('agent tool call reaches the browser mixer and acknowledges its actual stat
   });
 
   await page.goto('/');
-  await page.getByText('Advanced controls', { exact: false }).click();
+  await expect(page.locator('.advanced-controls')).toHaveAttribute('open', '');
   await expect(page.getByText('Agent online', { exact: false })).toBeVisible();
   await page.getByRole('textbox', { name: 'DJ command' }).fill('Play EDM or something with less bass');
   await page.getByRole('button', { name: 'Send' }).click();
@@ -197,7 +197,7 @@ test('Stop all drops a manual request queued during an active fade', async ({ pa
   let requests = 0;
   await page.routeWebSocket('**/ws', socket => { socket.onMessage(raw => { if (JSON.parse(String(raw)).type === 'request') requests++; }); });
   await page.goto('/');
-  await page.getByText('Advanced controls', { exact: false }).click();
+  await expect(page.locator('.advanced-controls')).toHaveAttribute('open', '');
   await loadAndPlay(page, 'A', 'EDM or something');
   await page.getByLabel('Next track').selectOption({ label: 'Im Running Away · Play House' });
   await page.getByLabel('Transition duration').selectOption('8');

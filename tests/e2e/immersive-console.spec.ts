@@ -34,8 +34,10 @@ test('video fills first screen and controls remain available', async ({ page }) 
   await page.keyboard.press('ArrowLeft');
   await expect(page.getByLabel('Performance deck A low EQ')).toHaveValue('-1');
   await page.screenshot({ path: 'test-results/immersive-desktop-controls.png' });
-  await page.getByRole('button', { name: 'Controls' }).click();
-  await page.getByText('Advanced controls', { exact: false }).click();
+  await page.mouse.move(0, 250);
+  await expect(controls).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#performance-tray')).toBeVisible();
+  await expect(page.locator('.advanced-controls')).toHaveAttribute('open', '');
   await expect(page.getByRole('region', { name: 'Deck A', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Track library' })).toBeVisible();
   const library = page.getByRole('region', { name: 'Track library' });
@@ -48,6 +50,8 @@ test('video fills first screen and controls remain available', async ({ page }) 
   await expect(deckA.getByText('Ready')).toBeVisible();
   await deckA.getByRole('button', { name: 'Play' }).click();
   await expect(page.locator('.stage-bpm')).toHaveCount(0);
+  await expect(controls).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#performance-tray')).toBeVisible();
   await page.screenshot({ path: 'test-results/immersive-below-fold.png', fullPage: true });
 });
 
@@ -68,6 +72,9 @@ test('mobile stage and touch controls', async ({ page }) => {
   await page.screenshot({ path: 'test-results/immersive-mobile-collapsed.png' });
   await controls.click();
   await expect(page.getByRole('region', { name: 'DJ assistant' })).toBeInViewport();
+  await page.mouse.move(0, 200);
+  await expect(controls).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#performance-tray')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hold to speak DJ command' })).toBeInViewport();
   await page.screenshot({ path: 'test-results/immersive-mobile-controls.png' });
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390);

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('new bundled songs appear without a reviewed BPM or cue claim', async ({page}) => {
   await page.goto('/');
-  await page.getByText('Advanced controls', {exact:false}).click();
+  await expect(page.locator('.advanced-controls')).toHaveAttribute('open', '');
   const deck = page.getByRole('region', {name:'Deck A', exact:true});
   const picker = deck.getByLabel('Track to load on deck A');
   await expect(picker.locator('option')).toHaveCount(4);

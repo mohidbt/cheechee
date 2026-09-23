@@ -4,7 +4,7 @@ export type BridgeEvent =
   | { type: 'connection'; connected: boolean }
   | { type: 'busy'; busy: boolean }
   | { type: 'tool'; requestId: string; batchId: string; index: number; command: Command; status: 'requested' | 'scheduled' | 'completed' | 'failed'; result?: CommandResult }
-  | { type: 'assistant'; text: string; acknowledged: boolean }
+  | { type: 'assistant'; text: string; acknowledged: boolean; source: 'conversation' | 'tool_result' }
   | { type: 'autonomy_failure'; requestId: string; reason: string }
   | { type: 'error'; text: string };
 
@@ -15,6 +15,7 @@ export class DJBridge {
   private generation = 0;
   private seenBatches = new Set<string>();
   private applied = false;
+  private hadToolCall = false;
   private closed = false;
   private httpConnected = false;
   private manualAbort?: AbortController;
@@ -68,6 +69,7 @@ export class DJBridge {
     const requestId = crypto.randomUUID();
     this.requestId = requestId;
     this.applied = false;
+    this.hadToolCall = false;
     this.onEvent({ type: 'busy', busy: true });
     const message: ClientMessage = {
       type: 'request', requestId, text: text.trim(), state: this.engine.getState(),
@@ -127,6 +129,7 @@ export class DJBridge {
     if (this.requestId && this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: 'cancel', requestId: this.requestId }));
     this.requestId = undefined;
     this.applied = false;
+    this.hadToolCall = false;
     this.onEvent({ type: 'busy', busy: false });
   }
 
@@ -177,11 +180,12 @@ export class DJBridge {
       return;
     }
     if (message.type === 'assistant_message') {
-      this.onEvent({ type: 'assistant', text: message.text, acknowledged: this.applied });
+      this.onEvent({ type: 'assistant', text: message.text, acknowledged: this.applied, source: this.hadToolCall ? 'tool_result' : 'conversation' });
       return;
     }
     if (this.seenBatches.has(message.batchId)) return;
     this.seenBatches.add(message.batchId);
+    this.hadToolCall = true;
     const generation = this.generation;
     const results: CommandResult[] = [];
     for (const [index, command] of message.commands.entries()) {
@@ -208,6 +212,6 @@ export class DJBridge {
     const result: BatchResult = { ok: !failed, message: summary, results, state: this.engine.getState() };
     this.applied = true;
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: 'tool_result', requestId: message.requestId, batchId: message.batchId, result }));
-    else if (this.httpMode && generation === this.generation && message.requestId === this.requestId) this.onEvent({ type: 'assistant', text: result.message, acknowledged: true });
+    else if (this.httpMode && generation === this.generation && message.requestId === this.requestId) this.onEvent({ type: 'assistant', text: result.message, acknowledged: true, source: 'tool_result' });
   }
 }

@@ -14,7 +14,7 @@ test('a pending manual request cannot start Autopilot and a transition changes t
     if (message.type === 'autonomy_request') autonomyRequests++;
   }));
   await page.goto('/');
-  await page.getByText('Advanced controls', { exact: false }).click();
+  await expect(page.locator('.advanced-controls')).toHaveAttribute('open', '');
   const deck = page.getByRole('region', { name: 'Deck A', exact: true });
   await deck.getByLabel('Track to load on deck A').selectOption({ label: 'EDM or something' });
   await deck.getByRole('button', { name: 'Load track' }).click();

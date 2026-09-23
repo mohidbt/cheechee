@@ -191,10 +191,10 @@ export default function App() {
       lastTransition = current;
     });
     const onEvent = (event: BridgeEvent) => {
-      if (event.type === 'connection') setConnected(event.connected);
+      if (event.type === 'connection') { setConnected(event.connected); if (!event.connected) cancelSpeech(); }
       if (event.type === 'busy') setBusy(event.busy);
       if (event.type === 'error') add({ kind: 'error', text: event.text, status: 'failed' });
-      if (event.type === 'assistant') { add({ kind: 'assistant', text: event.text }); if (event.acknowledged) void speakRef.current(event.text); }
+      if (event.type === 'assistant') { add({ kind: 'assistant', text: event.text }); if (event.source === 'conversation') void speakRef.current(event.text); }
       if (event.type === 'tool') {
         const id = `${event.requestId}:${event.batchId}:${event.index}`;
         add({ id, kind: 'tool', text: `${event.index + 1}. ${event.result?.message || event.command.type.replaceAll('_', ' ')}`, detail: `apply_mix command ${event.index + 1}\n${JSON.stringify(event.command, null, 2)}${event.result ? `\nResult: ${JSON.stringify(event.result, null, 2)}` : ''}`, status: event.status });
@@ -269,13 +269,14 @@ export default function App() {
   }, [engine]);
 
   const submit = useCallback((text: string) => {
+    cancelSpeech();
     autopilotRef.current?.pause('Paused for manual request.');
     autopilotRef.current?.cancelManualCue();
     if (engine.getState().transition) { queuedRequest.current = text; add({ kind: 'user', text }); add({ kind: 'system', text: 'Manual request queued until the current transition finishes.', status: 'scheduled' }); return; }
     const context = autopilotRef.current?.getContext() || buildMusicalContext(engine.getState(), tracksRef.current, DEFAULT_OBJECTIVE, []);
     if (bridgeRef.current?.submit(text, context)) add({ kind: 'user', text });
     else add({ kind: 'error', text: 'The agent is busy or disconnected.' });
-  }, [add, engine]);
+  }, [add, cancelSpeech, engine]);
   const manual = useCallback(async (command: Command) => {
     const generation = queueGeneration.current;
     autopilotRef.current?.pause('Paused for manual control.');
