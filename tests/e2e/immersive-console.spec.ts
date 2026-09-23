@@ -38,11 +38,16 @@ test('video fills first screen and controls remain available', async ({ page }) 
   await page.getByText('Advanced controls', { exact: false }).click();
   await expect(page.getByRole('region', { name: 'Deck A', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Track library' })).toBeVisible();
+  const library = page.getByRole('region', { name: 'Track library' });
+  await expect(library.locator('.library-row')).toHaveCount(4);
+  for (const title of ['EDM or something', 'Im Running Away', 'The Power Of The Beat', 'Random Drop']) {
+    await expect(library.getByText(title, { exact: true })).toBeVisible();
+  }
   const deckA = page.getByRole('region', { name: 'Deck A', exact: true });
   await deckA.getByRole('button', { name: 'Load track' }).click();
   await expect(deckA.getByText('Ready')).toBeVisible();
   await deckA.getByRole('button', { name: 'Play' }).click();
-  await expect(page.getByText('140 BPM', { exact: true })).toBeVisible();
+  await expect(page.locator('.stage-bpm')).toHaveCount(0);
   await page.screenshot({ path: 'test-results/immersive-below-fold.png', fullPage: true });
 });
 

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emptyState, type AudioEngine, type AudioLifecycleEvent, type AudioTrack, type DecisionAck, type ServerMessage } from '../shared/contracts';
+import { demoCueSets } from '../shared/catalog';
 import { AutopilotController, type AutopilotClock, type AutopilotTransport } from '../src/autopilot/controller';
 
 const tracks: AudioTrack[] = [
@@ -186,10 +187,12 @@ describe('temporary agent unavailability', () => {
 });
 
 describe('manual reviewed cue scheduling', () => {
+  beforeEach(() => { demoCueSets['fixture-loop'] = {cueInSeconds:0.11,cueInLabel:'Reviewed test pulse',reviewedPulseGrid:{bpm:140,firstPulseSeconds:0.11,provenance:'manual',reviewed:true},exits:[{fileSeconds:2.45,endSeconds:2.75,kind:'loop_exit',provenance:'manual',reviewed:true,label:'Test loop exit'}]}; });
+  afterEach(() => { delete demoCueSets['fixture-loop']; });
   const command = { type: 'transition' as const, track_id: 'b', style: 'crossfade' as const, duration_seconds: 2, timing: 'next_cue' as const };
   it('prepares, acknowledges a future reviewed cue, then commits only near its audio time', async () => {
     const h = harness();
-    h.state.decks.A = { ...h.state.decks.A, trackId: 'melodic', playbackId: 'source', status: 'playing', loop: true, duration: 6.875, position: 1, playedSeconds: 1 };
+    h.state.decks.A = { ...h.state.decks.A, trackId: 'fixture-loop', playbackId: 'source', status: 'playing', loop: true, duration: 6.875, position: 1, playedSeconds: 1 };
     const result = await h.controller.scheduleManualCue(command);
     expect(result).toMatchObject({ ok: true, scheduled: true });
     expect(h.transitions).toHaveLength(0);
@@ -199,7 +202,7 @@ describe('manual reviewed cue scheduling', () => {
   });
   it('cancels a pending cue on Stop all and rejects ambiguous two-deck playback', async () => {
     const h = harness();
-    h.state.decks.A = { ...h.state.decks.A, trackId: 'melodic', playbackId: 'source', status: 'playing', loop: true, duration: 6.875, position: 1, playedSeconds: 1 };
+    h.state.decks.A = { ...h.state.decks.A, trackId: 'fixture-loop', playbackId: 'source', status: 'playing', loop: true, duration: 6.875, position: 1, playedSeconds: 1 };
     expect((await h.controller.scheduleManualCue(command)).scheduled).toBe(true);
     h.controller.stopAll(); h.advance(2); h.runIntervals(); expect(h.transitions).toHaveLength(0);
     h.state.decks.B = { ...h.state.decks.B, trackId: 'a', playbackId: 'other', status: 'playing', loop: true, duration: 12 };

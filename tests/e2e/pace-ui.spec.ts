@@ -8,7 +8,7 @@ test('Autopilot pace setting reschedules one browser controller window', async (
     const message = JSON.parse(String(raw));
     if (message.type === 'autonomy_request') {
       requests.push(message);
-      if (message.trigger === 'cold_start') socket.send(JSON.stringify({ type: 'dj_decision', requestId: message.requestId, decisionId: 'start', sessionId: message.sessionId, controlRevision: message.controlRevision, sourcePlaybackId: message.sourcePlaybackId, decision: { type: 'start', track_id: 'melodic', explanation: 'Start the set.' } }));
+      if (message.trigger === 'cold_start') socket.send(JSON.stringify({ type: 'dj_decision', requestId: message.requestId, decisionId: 'start', sessionId: message.sessionId, controlRevision: message.controlRevision, sourcePlaybackId: message.sourcePlaybackId, decision: { type: 'start', track_id: 'edm-or-something', explanation: 'Start the set.' } }));
     }
     if (message.type === 'cancel') cancelled.push(message.requestId);
   }));

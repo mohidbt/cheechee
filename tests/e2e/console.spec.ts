@@ -20,7 +20,7 @@ test('manual mixing surface plays, processes, transitions, and stops audio', asy
   await expect(page.getByRole('complementary', { name: "cheechee's thoughts" })).toBeVisible();
   await page.getByText('Advanced controls', { exact: false }).click();
   await expect(page.getByRole('region', { name: 'DJ assistant' })).toBeVisible();
-  await loadAndPlay(page, 'A', 'Melodic');
+  await loadAndPlay(page, 'A', 'EDM or something');
   await expect.poll(async () => Number(await deck(page, 'A').getByRole('progressbar').getAttribute('aria-valuenow'))).toBeGreaterThan(0);
   const scope = deck(page, 'A').locator('canvas');
   await expect.poll(async () => scope.evaluate((canvas: HTMLCanvasElement) => {
@@ -49,7 +49,7 @@ test('manual mixing surface plays, processes, transitions, and stops audio', asy
     await page.getByRole('button', { name: style, exact: true }).click();
     const source = await deck(page, 'A').getByText('On air').isVisible() ? 'A' : 'B';
     const target = source === 'A' ? 'B' : 'A';
-    await page.getByLabel('Next track').selectOption({ label: source === 'A' ? 'Loopy · Fupi' : 'Skippy · Fupi' });
+    await page.getByLabel('Next track').selectOption({ label: source === 'A' ? 'Im Running Away · Play House' : 'The Power Of The Beat · Play House' });
     await page.getByLabel('Transition duration').selectOption('2');
     await page.getByRole('button', { name: 'Start transition' }).click();
     await expect(deck(page, target).getByText('On air')).toBeVisible();
@@ -81,8 +81,8 @@ test('small screen remains usable and accepts a local track', async ({ page }) =
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', 390);
   await expect(page.getByText('Advanced controls', { exact: false })).toBeVisible();
   await page.screenshot({ path: 'test-results/console-mobile.png', fullPage: true });
-  await page.locator('input[type=file]').setInputFiles('public/audio/melodicedm.wav');
-  await expect(page.locator('.library-list').getByText('melodicedm', { exact: true })).toBeVisible();
+  await page.locator('input[type=file]').setInputFiles('public/audio/play-house-random-drop.mp3');
+  await expect(page.locator('.library-list').getByText('play-house-random-drop', { exact: true })).toBeVisible();
 });
 
 test('agent tool call reaches the browser mixer and acknowledges its actual state', async ({ page }) => {
@@ -98,7 +98,7 @@ test('agent tool call reaches the browser mixer and acknowledges its actual stat
         requestId = message.requestId;
         socket.send(JSON.stringify({
           type: 'tool_call', requestId, batchId: 'browser-smoke', commands: [
-            { type: 'load_track', deck: 'A', track_id: 'melodic' },
+            { type: 'load_track', deck: 'A', track_id: 'edm-or-something' },
             { type: 'play', deck: 'A' },
             { type: 'set_eq', deck: 'A', low_db: -8, mid_db: 0, high_db: 0 },
             { type: 'set_filter', deck: 'A', mode: 'highpass', frequency_hz: 900, duration_seconds: 0.2 },
@@ -116,14 +116,14 @@ test('agent tool call reaches the browser mixer and acknowledges its actual stat
   await page.goto('/');
   await page.getByText('Advanced controls', { exact: false }).click();
   await expect(page.getByText('Agent online', { exact: false })).toBeVisible();
-  await page.getByRole('textbox', { name: 'DJ command' }).fill('Play Melodic with less bass');
+  await page.getByRole('textbox', { name: 'DJ command' }).fill('Play EDM or something with less bass');
   await page.getByRole('button', { name: 'Send' }).click();
   await expect.poll(() => acknowledgement?.result?.results?.length).toBe(4);
   expect(acknowledgement).toMatchObject({
     type: 'tool_result', requestId, batchId: 'browser-smoke',
     result: {
       ok: true,
-      state: { decks: { A: { trackId: 'melodic', status: 'playing', eq: { low: -8 }, filter: { mode: 'highpass', frequency: 900 } } } },
+      state: { decks: { A: { trackId: 'edm-or-something', status: 'playing', eq: { low: -8 }, filter: { mode: 'highpass', frequency: 900 } } } },
     },
   });
   expect(acknowledgement.result.results.every((result: { ok: boolean }) => result.ok)).toBe(true);
@@ -131,9 +131,9 @@ test('agent tool call reaches the browser mixer and acknowledges its actual stat
   await expect(deck(page, 'A').getByLabel('Deck A low EQ')).toHaveValue('-8');
   await expect(deck(page, 'A').getByRole('button', { name: 'High pass' })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: "cheechee's thoughts" }).click();
-  await expect(page.getByRole('complementary', { name: "cheechee's thoughts" }).getByText('Playing Melodic on deck A.', { exact: false }).first()).toBeVisible();
+  await expect(page.getByRole('complementary', { name: "cheechee's thoughts" }).getByText('Playing EDM or something on deck A.', { exact: false }).first()).toBeVisible();
   const actions = page.getByRole('complementary', { name: "cheechee's thoughts" });
-  await expect(actions.getByText('Play Melodic with less bass')).toBeVisible();
+  await expect(actions.getByText('Play EDM or something with less bass')).toBeVisible();
   await expect(actions.locator('.activity-tool').getByText('Details')).toHaveCount(4);
   await actions.locator('.activity-tool').getByText('Details').first().click();
   await expect(actions.locator('.activity-tool pre').first()).toContainText('Result:');
@@ -154,8 +154,8 @@ test('Autopilot starts from an acknowledged decision and manual input pauses it 
         decisionCount++;
         const alreadyPlaying = Boolean(message.sourcePlaybackId);
         const decision = alreadyPlaying
-          ? { type: 'transition', track_id: 'loopy', style: 'crossfade', duration_seconds: 2, explanation: 'Moving to Loopy after the opening.' }
-          : { type: 'start', track_id: 'melodic', explanation: 'Starting with Melodic for a steady opening.' };
+          ? { type: 'transition', track_id: 'im-running-away', style: 'crossfade', duration_seconds: 2, explanation: 'Moving to Im Running Away after the opening.' }
+          : { type: 'start', track_id: 'edm-or-something', explanation: 'Starting with EDM or something for a steady opening.' };
         socket.send(JSON.stringify({ type: 'dj_decision', requestId: message.requestId, decisionId: 'phase-aware-1', sessionId: message.sessionId, controlRevision: message.controlRevision, sourcePlaybackId: message.sourcePlaybackId, decision }));
       }
       if (message.type === 'decision_result') acknowledgement = message;
@@ -166,21 +166,24 @@ test('Autopilot starts from an acknowledged decision and manual input pauses it 
   await page.getByRole('switch', { name: 'Autopilot' }).click();
   await expect(page.getByRole('switch', { name: 'Autopilot' })).toHaveAttribute('aria-checked', 'true');
   await expect.poll(() => acknowledgement?.result?.accepted).toBe(true);
-  await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('Melodic')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('EDM or something')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('On air')).toBeVisible();
   await page.getByRole('button', { name: "cheechee's thoughts" }).click();
   const actions = page.getByRole('complementary', { name: "cheechee's thoughts" });
-  await expect(actions.getByText(/Agent explanation: (Starting with Melodic|Moving to Loopy)/).first()).toBeVisible();
-  await expect(actions.getByText('Started melodic.')).toBeVisible();
+  await expect(actions.getByText(/Agent explanation: (Starting with EDM or something|Moving to Im Running Away)/).first()).toBeVisible();
+  await expect(actions.getByText('Started edm-or-something.')).toBeVisible();
   await page.screenshot({ path: 'test-results/autopilot-ui.png', fullPage: true });
   const decisionsBeforeManual = decisionCount;
+  const controls = page.getByRole('button', { name: 'Controls' });
+  if (await controls.getAttribute('aria-expanded') === 'false') await controls.click();
   await page.getByRole('textbox', { name: 'DJ command' }).fill('Make it calmer');
   await expect(page.getByRole('switch', { name: 'Autopilot' })).toHaveAttribute('aria-checked', 'false');
   await expect(page.getByRole('status').getByText('Paused for manual control.')).toBeVisible();
   await page.getByRole('button', { name: 'Send' }).click();
-  await expect.poll(() => manualRequest?.context?.now?.trackId).toBe('melodic');
+  await expect.poll(() => manualRequest?.context?.now?.trackId).toBe('edm-or-something');
   expect(manualRequest.context.now.playbackId).toBeTruthy();
-  expect(manualRequest.context.upcoming[0]).toMatchObject({ kind: 'loop_exit', provenance: 'manual', reviewed: true, alignment: 'reviewed_pulse_grid' });
+  expect(manualRequest.context.upcoming.every((cue: { reviewed: boolean }) => !cue.reviewed)).toBe(true);
+  expect(manualRequest.context.remainder.naturalSeconds).toBeGreaterThan(0);
   expect(manualRequest.context.remainder.residenceSeconds).toBeNull();
   await page.getByRole('button', { name: 'Stop all' }).click();
   await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('On air')).toHaveCount(0);
@@ -195,8 +198,8 @@ test('Stop all drops a manual request queued during an active fade', async ({ pa
   await page.routeWebSocket('**/ws', socket => { socket.onMessage(raw => { if (JSON.parse(String(raw)).type === 'request') requests++; }); });
   await page.goto('/');
   await page.getByText('Advanced controls', { exact: false }).click();
-  await loadAndPlay(page, 'A', 'Melodic');
-  await page.getByLabel('Next track').selectOption({ label: 'Loopy · Fupi' });
+  await loadAndPlay(page, 'A', 'EDM or something');
+  await page.getByLabel('Next track').selectOption({ label: 'Im Running Away · Play House' });
   await page.getByLabel('Transition duration').selectOption('8');
   await page.getByRole('button', { name: 'Start transition' }).click();
   await expect(page.getByText('in progress')).toBeVisible();

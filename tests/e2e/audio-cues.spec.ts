@@ -7,8 +7,8 @@ test('local analysis and cue offsets use decoded media and the audio clock', asy
     const {createAudioEngine} = await import(/* @vite-ignore */ modulePath) as typeof import('../../src/audio/engine');
     const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
     const tracks = [
-      {id:'a', title:'A', artist:'Fixture', tags:[], energy:'unknown' as const, source:'bundled' as const, loop:true, url:'/audio/melodicedm.wav'},
-      {id:'b', title:'B', artist:'Fixture', tags:[], energy:'unknown' as const, source:'bundled' as const, loop:true, url:'/audio/melodicloopyedm.wav'},
+      {id:'a', title:'A', artist:'Fixture', tags:[], energy:'unknown' as const, source:'bundled' as const, loop:true, url:'/tests/fixtures/audio/loop-a.wav'},
+      {id:'b', title:'B', artist:'Fixture', tags:[], energy:'unknown' as const, source:'bundled' as const, loop:true, url:'/tests/fixtures/audio/loop-b.wav'},
     ];
     const engine = createAudioEngine(tracks);
     const events: Array<{type:string; deck?:string; audioTime:number}> = [];
@@ -74,8 +74,8 @@ test('local analysis and cue offsets use decoded media and the audio clock', asy
   expect(result.observedStart).toBeCloseTo(result.targetTime, 2);
   expect(result.finished.transition).toBeNull();
   expect(result.finished.decks.B.status).toBe('playing');
-  console.log('Demo estimated tempo:', JSON.stringify(result.analysis.estimatedTempo));
-  console.log('Loopy estimated tempo:', JSON.stringify(result.secondAnalysis.estimatedTempo));
+  console.log('Fixture A estimated tempo:', JSON.stringify(result.analysis.estimatedTempo));
+  console.log('Fixture B estimated tempo:', JSON.stringify(result.secondAnalysis.estimatedTempo));
   console.log('Explicit analysis timing:', Math.round(result.analysisMs), 'ms; max 16ms timer gap:', Math.round(result.maxTimerGapMs), 'ms');
 });
 
@@ -84,7 +84,7 @@ test('versioned analysis is reused from IndexedDB after reload', async ({page}) 
   const analyze = async (blockPcmReads: boolean) => page.evaluate(async blocked => {
     const modulePath = '/src/audio/engine.ts';
     const {createAudioEngine} = await import(/* @vite-ignore */ modulePath) as typeof import('../../src/audio/engine');
-    const engine = createAudioEngine([{id:'cached', title:'Cached', artist:'Fixture', tags:[], energy:'unknown', source:'bundled', loop:true, url:'/audio/melodicskippyedm.wav'}]);
+    const engine = createAudioEngine([{id:'cached', title:'Cached', artist:'Fixture', tags:[], energy:'unknown', source:'bundled', loop:true, url:'/tests/fixtures/audio/long.wav'}]);
     await engine.unlock();
     await engine.prepareTrack('cached');
     const original = AudioBuffer.prototype.getChannelData;
@@ -93,7 +93,7 @@ test('versioned analysis is reused from IndexedDB after reload', async ({page}) 
     finally { AudioBuffer.prototype.getChannelData = original; engine.dispose(); }
   }, blockPcmReads);
   const first = await analyze(false);
-  console.log('Skippy estimated tempo:', JSON.stringify(first.estimatedTempo));
+  console.log('Long fixture estimated tempo:', JSON.stringify(first.estimatedTempo));
   await page.reload();
   const second = await analyze(true);
   expect(second.contentKey).toBe(first.contentKey);
@@ -108,8 +108,8 @@ test('late cue commit leaves a short source playing', async ({page}) => {
     const modulePath = '/src/audio/engine.ts';
     const {createAudioEngine} = await import(/* @vite-ignore */ modulePath) as typeof import('../../src/audio/engine');
     const engine = createAudioEngine([
-      {id:'short', title:'Short', artist:'Fixture', tags:[], energy:'unknown', source:'bundled', loop:false, url:'/audio/melodicedm.wav'},
-      {id:'next', title:'Next', artist:'Fixture', tags:[], energy:'unknown', source:'bundled', loop:true, url:'/audio/melodicloopyedm.wav'},
+      {id:'short', title:'Short', artist:'Fixture', tags:[], energy:'unknown', source:'bundled', loop:false, url:'/tests/fixtures/audio/loop-a.wav'},
+      {id:'next', title:'Next', artist:'Fixture', tags:[], energy:'unknown', source:'bundled', loop:true, url:'/tests/fixtures/audio/loop-b.wav'},
     ]);
     const events: string[] = [];
     engine.subscribeLifecycle(event => { if (event.type === 'ended') events.push(event.reason); });

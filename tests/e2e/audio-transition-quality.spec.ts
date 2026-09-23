@@ -6,8 +6,8 @@ test('prepared transitions keep measured master output active in both directions
     const modulePath = '/src/audio/engine.ts';
     const {createAudioEngine} = await import(/* @vite-ignore */ modulePath) as typeof import('../../src/audio/engine');
     const tracks = [
-      {id:'melodic', title:'Melodic', artist:'Fixture', tags:[], energy:'unknown' as const, source:'bundled' as const, loop:true, url:'/audio/melodicedm.wav'},
-      {id:'loopy', title:'Loopy', artist:'Fixture', tags:[], energy:'unknown' as const, source:'bundled' as const, loop:true, url:'/audio/melodicloopyedm.wav'},
+      {id:'melodic', title:'Melodic', artist:'Fixture', tags:[], energy:'unknown' as const, source:'bundled' as const, loop:true, url:'/tests/fixtures/audio/loop-a.wav'},
+      {id:'loopy', title:'Loopy', artist:'Fixture', tags:[], energy:'unknown' as const, source:'bundled' as const, loop:true, url:'/tests/fixtures/audio/loop-b.wav'},
     ];
     const engine = createAudioEngine(tracks);
     const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

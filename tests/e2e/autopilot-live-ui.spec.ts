@@ -12,10 +12,10 @@ test('live Nebius decision plays and completes a transition in the UI', async ({
   await page.getByRole('switch', { name: 'Autopilot' }).click();
   const now = page.getByRole('region', { name: 'Performance mixer' });
   await expect(now.getByText('On air')).toBeVisible({ timeout: 20_000 });
-  const first = await now.locator('.now-deck').filter({ hasText: 'On air' }).locator('.now-track strong').textContent();
+  const first = await now.locator('.performance-deck').filter({ hasText: 'On air' }).locator('.performance-deck-heading strong').textContent();
   await expect(page.getByRole('complementary', { name: "cheechee's thoughts" }).getByText('Transition completed.', { exact: true })).toBeVisible({ timeout: 85_000 });
   await expect(now.getByText('On air')).toBeVisible();
-  const next = await now.locator('.now-deck').filter({ hasText: 'On air' }).locator('.now-track strong').textContent();
+  const next = await now.locator('.performance-deck').filter({ hasText: 'On air' }).locator('.performance-deck-heading strong').textContent();
   expect(next).not.toBe(first);
   await page.screenshot({ path: 'test-results/autopilot-live-ui.png', fullPage: true });
   await page.getByRole('button', { name: 'Stop all' }).click();

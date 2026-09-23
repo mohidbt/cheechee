@@ -7,8 +7,8 @@ test('audio engine reconciles playback and cancels scheduled sources and echo ta
     const {createAudioEngine} = await import(/* @vite-ignore */ modulePath) as typeof import('../../src/audio/engine');
     const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
     const tracks = [
-      {id:'loop', title:'Loop', artist:'Fixture', tags:[], energy:'unknown' as const, source:'bundled' as const, loop:true, url:'/audio/melodicedm.wav'},
-      {id:'next', title:'Next', artist:'Fixture', tags:[], energy:'unknown' as const, source:'bundled' as const, loop:true, url:'/audio/melodicloopyedm.wav'},
+      {id:'loop', title:'Loop', artist:'Fixture', tags:[], energy:'unknown' as const, source:'bundled' as const, loop:true, url:'/tests/fixtures/audio/loop-a.wav'},
+      {id:'next', title:'Next', artist:'Fixture', tags:[], energy:'unknown' as const, source:'bundled' as const, loop:true, url:'/tests/fixtures/audio/loop-b.wav'},
     ];
     const engine = createAudioEngine(tracks);
     const events: Array<{type:string; playbackId?:string; reason?:string}> = [];

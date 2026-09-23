@@ -13,6 +13,7 @@ const message = (error: unknown) => error instanceof Error ? error.message : Str
 
 type VoiceProps = {
   enabled: boolean;
+  disabledReason: string;
   engine: AudioEngine;
   onSubmit: (text: string) => void;
   onError: (text: string) => void;
@@ -21,7 +22,7 @@ type VoiceProps = {
   onStart: () => void;
 };
 
-function VoiceInput({ enabled, engine, onSubmit, onError, stopRef, cancelSpeech, onStart }: VoiceProps) {
+function VoiceInput({ enabled, disabledReason, engine, onSubmit, onError, stopRef, cancelSpeech, onStart }: VoiceProps) {
   const [held, setHeld] = useState(false);
   const [preview, setPreview] = useState('');
   const session = useRef<{ released: boolean; connected: boolean; segments: string[]; timer?: ReturnType<typeof setTimeout>; done: boolean } | null>(null);
@@ -118,7 +119,7 @@ function VoiceInput({ enabled, engine, onSubmit, onError, stopRef, cancelSpeech,
     } catch (error) { callback.current.onError(`Microphone: ${message(error)}`); stop(); }
   }
 
-  return <div className="voice-input"><button type="button" className={`mic-button ${held ? 'is-held' : ''}`} disabled={!enabled} aria-label="Hold to speak DJ command" onPointerDown={event => { if (event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); void start(); }} onPointerUp={release} onPointerCancel={stop} onKeyDown={event => { if ((event.key === ' ' || event.key === 'Enter') && !event.repeat) { event.preventDefault(); void start(); } }} onKeyUp={event => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); release(); } }}>🎙 {held ? 'Listening' : 'Hold to speak'}</button><span className="voice-preview" aria-live="polite">{preview || (enabled ? 'Release to send your request' : 'Voice needs the agent and ElevenLabs key')}</span></div>;
+  return <div className="voice-input"><button type="button" className={`mic-button ${held ? 'is-held' : ''}`} disabled={!enabled} aria-label="Hold to speak DJ command" onPointerDown={event => { if (event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); void start(); }} onPointerUp={release} onPointerCancel={stop} onKeyDown={event => { if ((event.key === ' ' || event.key === 'Enter') && !event.repeat) { event.preventDefault(); void start(); } }} onKeyUp={event => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); release(); } }}>🎙 {held ? 'Listening' : 'Hold to speak'}</button><span className="voice-preview" aria-live="polite">{preview || (enabled ? 'Release to send your request' : disabledReason)}</span></div>;
 }
 
 export default function App() {
@@ -334,5 +335,6 @@ export default function App() {
   }, [add, analyzing, engine]);
 
   const agentReady = connected && services?.agent === true && !busy;
-  return <Console state={state} tracks={tracks} engine={engine} connected={connected} services={services} busy={busy} activities={activities} analyses={analyses} analyzing={analyzing} onAnalyze={() => void analyzeLibrary()} autopilot={autopilot} onAutopilotToggle={() => { const generation = ++autopilotToggleGeneration.current; if (autopilot.mode === 'running') { autopilotRef.current?.disable(); return; } if (analyzing) return; if (bridgeRef.current?.isManualBusy()) { add({ kind: 'system', text: 'Wait for the current DJ request to finish before starting Autopilot.' }); return; } void (async () => { try { if (!engine.getState().unlocked) await engine.unlock(); if (generation === autopilotToggleGeneration.current) autopilotRef.current?.enable(); } catch (error) { if (generation === autopilotToggleGeneration.current) add({ kind: 'error', text: `Audio could not start: ${message(error)}` }); } })(); }} onObjectiveChange={value => autopilotRef.current?.setObjective(value)} onChangeInterval={value => autopilotRef.current?.setChangeInterval(value)} onManualIntent={() => { autopilotRef.current?.pause('Paused for manual control.'); autopilotRef.current?.cancelManualCue(); }} onCommand={manual} onSubmit={submit} onStopAll={stopAll} videoResetKey={videoResetKey} onImport={importFiles} speechToggle={<button type="button" className="speech-toggle" aria-pressed={speechOn} onClick={() => { setSpeechOn(value => !value); cancelSpeech(); }}>{speechOn ? 'Voice reply on' : 'Voice reply off'}</button>} voiceControls={<VoiceInput enabled={agentReady && services?.speech === true} engine={engine} onSubmit={submit} onStart={() => { autopilotRef.current?.pause('Paused for voice control.'); autopilotRef.current?.cancelManualCue(); }} onError={text => add({ kind: 'error', text })} stopRef={voiceStop} cancelSpeech={cancelSpeech} />} />;
+  const voiceDisabledReason = !services ? 'Connecting voice services…' : !services.speech ? 'Voice service unavailable.' : !services.agent ? 'DJ agent unavailable.' : !connected ? 'Connecting to DJ agent…' : 'DJ is working. Try again shortly.';
+  return <Console state={state} tracks={tracks} engine={engine} connected={connected} services={services} busy={busy} activities={activities} analyses={analyses} analyzing={analyzing} onAnalyze={() => void analyzeLibrary()} autopilot={autopilot} onAutopilotToggle={() => { const generation = ++autopilotToggleGeneration.current; if (autopilot.mode === 'running') { autopilotRef.current?.disable(); return; } if (analyzing) return; if (bridgeRef.current?.isManualBusy()) { add({ kind: 'system', text: 'Wait for the current DJ request to finish before starting Autopilot.' }); return; } void (async () => { try { if (!engine.getState().unlocked) await engine.unlock(); if (generation === autopilotToggleGeneration.current) autopilotRef.current?.enable(); } catch (error) { if (generation === autopilotToggleGeneration.current) add({ kind: 'error', text: `Audio could not start: ${message(error)}` }); } })(); }} onObjectiveChange={value => autopilotRef.current?.setObjective(value)} onChangeInterval={value => autopilotRef.current?.setChangeInterval(value)} onManualIntent={() => { autopilotRef.current?.pause('Paused for manual control.'); autopilotRef.current?.cancelManualCue(); }} onCommand={manual} onSubmit={submit} onStopAll={stopAll} videoResetKey={videoResetKey} onImport={importFiles} speechToggle={<button type="button" className="speech-toggle" aria-pressed={speechOn} onClick={() => { setSpeechOn(value => !value); cancelSpeech(); }}>{speechOn ? 'Voice reply on' : 'Voice reply off'}</button>} voiceControls={<VoiceInput enabled={agentReady && services?.speech === true} disabledReason={voiceDisabledReason} engine={engine} onSubmit={submit} onStart={() => { autopilotRef.current?.pause('Paused for voice control.'); autopilotRef.current?.cancelManualCue(); }} onError={text => add({ kind: 'error', text })} stopRef={voiceStop} cancelSpeech={cancelSpeech} />} />;
 }

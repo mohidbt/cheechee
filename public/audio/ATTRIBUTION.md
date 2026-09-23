@@ -1,5 +1,3 @@
-# Demo audio
+# Bundled audio
 
-`melodicedm.wav`, `melodicloopyedm.wav`, and `melodicskippyedm.wav` are by Fupi, from [Melodic EDM Loops](https://opengameart.org/content/melodic-edm-loops). They are published under [Creative Commons CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
-
-The application bundles these files locally. The track names, tags, and energy labels are curated demo descriptions.
+`play-house-edm-or-something.mp3`, `play-house-im-running-away.mp3`, `play-house-the-power-of-the-beat.mp3`, and `play-house-random-drop.mp3` were supplied by the project owner from `~/Downloads` on 2026-09-23. The original files were left untouched. No license or tempo metadata is asserted here.
