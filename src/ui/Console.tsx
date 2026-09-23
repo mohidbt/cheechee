@@ -139,6 +139,7 @@ export function Console({ state, tracks, engine, connected, services, busy, acti
   const [duration, setDuration] = useState(4);
   const [transitionTrack, setTransitionTrack] = useState('');
   const [trayPinned, setTrayPinned] = useState(true);
+  const [trayDismissed, setTrayDismissed] = useState(false);
   const [showMixer, setShowMixer] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [unlockError, setUnlockError] = useState('');
@@ -146,8 +147,7 @@ export function Console({ state, tracks, engine, connected, services, busy, acti
   const fileInput = useRef<HTMLInputElement>(null);
   const musicPlaying = state.decks.A.status === 'playing' || state.decks.B.status === 'playing';
   useEffect(() => {
-    if (!musicPlaying) setTrayPinned(true);
-    else if (!trayRef.current?.contains(document.activeElement)) setTrayPinned(false);
+    if (musicPlaying && !trayRef.current?.contains(document.activeElement)) setTrayPinned(false);
   }, [musicPlaying]);
   const currentTrack = (id: DeckId) => tracks.find(track => track.id === state.decks[id].trackId);
   const nextTrack = transitionTrack && tracks.some(track => track.id === transitionTrack)
@@ -181,16 +181,16 @@ export function Console({ state, tracks, engine, connected, services, busy, acti
       <header className="stage-header">
         <div className="stage-identity"><img className="stage-mark" src="/cheechee-mark.png" alt="" /><strong>Cheechee</strong><span className="stage-bpm">{bpmLine}</span></div>
         <div className="stage-actions-top">
-          <button type="button" className="actions-toggle" aria-expanded={actionsOpen} aria-controls="live-actions" onClick={() => setActionsOpen(value => !value)}>Actions{busy ? <span className="working-dot" aria-label="Agent working" /> : null}</button>
+          <button type="button" className="actions-toggle" aria-expanded={actionsOpen} aria-controls="live-actions" onClick={() => setActionsOpen(value => !value)}>cheechee's thoughts{busy ? <span className="working-dot" aria-label="Agent working" /> : null}</button>
           <button type="button" className="stop-all" onClick={onStopAll}>Stop all</button>
         </div>
       </header>
-      <aside id="live-actions" className={`actions-panel stage-actions ${actionsOpen ? 'is-open' : ''}`} aria-label="Actions" inert={!actionsOpen}>
-        <div className="activity-heading"><strong>Actions</strong><button type="button" aria-label="Close actions" onClick={() => setActionsOpen(false)}>Close</button></div>
+      <aside id="live-actions" className={`actions-panel stage-actions ${actionsOpen ? 'is-open' : ''}`} aria-label="cheechee's thoughts" inert={!actionsOpen}>
+        <div className="activity-heading"><strong>cheechee's thoughts</strong><button type="button" aria-label="Close cheechee's thoughts" onClick={() => setActionsOpen(false)}>Close</button></div>
         <div className="activity-feed" aria-live="polite">{activities.length === 0 ? <p className="empty-copy">Actions will appear here.</p> : activities.slice(-12).reverse().map(item => <div className={`activity-item activity-${item.kind}`} key={item.id}><span className="activity-symbol" aria-hidden="true">{item.kind === 'tool' ? '⌘' : item.kind === 'error' ? '!' : item.kind === 'user' ? '›' : '•'}</span><div><div className="activity-main"><span>{item.text}</span>{item.status && <small className={`activity-status status-${item.status}`}>{item.status}</small>}</div>{item.detail && <details><summary>Details</summary><pre>{item.detail}</pre></details>}</div><time dateTime={new Date(item.time).toISOString()}>{new Date(item.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</time></div>)}</div>
       </aside>
-      <div ref={trayRef} className={`stage-bottom ${trayPinned ? 'is-pinned' : ''} ${!musicPlaying ? 'is-idle' : ''} ${showMixer ? 'show-mixer' : ''}`} onBlurCapture={event => { if (musicPlaying && !event.currentTarget.contains(event.relatedTarget)) setTrayPinned(false); }}>
-        <button type="button" className="tray-toggle" aria-expanded={trayPinned} aria-controls="performance-tray" onClick={() => setTrayPinned(value => !value)}><span>Controls</span><span aria-hidden="true">{trayPinned ? '⌄' : '⌃'}</span></button>
+      <div ref={trayRef} className={`stage-bottom ${trayPinned ? 'is-pinned' : ''} ${trayDismissed ? 'is-dismissed' : ''} ${!musicPlaying ? 'is-idle' : ''} ${showMixer ? 'show-mixer' : ''}`} onPointerLeave={() => setTrayDismissed(false)} onFocusCapture={event => { if (!(event.target instanceof HTMLElement && event.target.classList.contains('tray-toggle'))) setTrayDismissed(false); }} onBlurCapture={event => { if (musicPlaying && !event.currentTarget.contains(event.relatedTarget)) setTrayPinned(false); }}>
+        <button type="button" className="tray-toggle" aria-expanded={trayPinned} aria-controls="performance-tray" onClick={() => { setTrayDismissed(trayPinned); setTrayPinned(value => !value); }}><span>Controls</span><span aria-hidden="true">{trayPinned ? '⌄' : '⌃'}</span></button>
         <div id="performance-tray" className="performance-tray">
           <div className="stage-inputs">
             <section className="assistant-input" aria-label="DJ assistant"><div className="stage-input-heading"><div><strong>Start some music</strong><span>Ask for a song or mood</span></div>{speechToggle}</div>{voiceControls}<form className="command-form" onSubmit={submit}><input aria-label="DJ command" value={text} onChange={event => { onManualIntent(); setText(event.target.value); }} placeholder={agentReady ? 'Play something upbeat…' : 'Agent unavailable'} disabled={busy || !agentReady} /><button type="submit" disabled={busy || !agentReady || !text.trim()}>{busy ? 'Working' : 'Send'}</button></form></section>

@@ -41,8 +41,8 @@ test('hosted HTTP manual tool changes real audio and performance video', async (
   await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('Melodic')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('On air')).toBeVisible();
   await expect(page.getByLabel('DJ performance video')).toHaveAttribute('data-active-clip', 'start_a', { timeout: 12_000 });
-  await page.getByRole('button', { name: 'Actions' }).click();
-  await expect(page.getByRole('complementary', { name: 'Actions' }).locator('.activity-tool')).toHaveCount(2);
+  await page.getByRole('button', { name: "cheechee's thoughts" }).click();
+  await expect(page.getByRole('complementary', { name: "cheechee's thoughts" }).locator('.activity-tool')).toHaveCount(2);
   await page.getByRole('button', { name: 'Stop all' }).click();
 });
 
@@ -63,8 +63,8 @@ test('hosted HTTP autonomous decision starts playback through local acceptance',
   await expect.poll(() => request?.type).toBe('autonomy_request');
   await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('Melodic')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('On air')).toBeVisible();
-  await page.getByRole('button', { name: 'Actions' }).click();
-  await expect(page.getByRole('complementary', { name: 'Actions' }).getByText('Agent explanation: Starting a steady local set.')).toBeVisible();
+  await page.getByRole('button', { name: "cheechee's thoughts" }).click();
+  await expect(page.getByRole('complementary', { name: "cheechee's thoughts" }).getByText('Agent explanation: Starting a steady local set.')).toBeVisible();
   await expect(page.getByLabel('DJ performance video')).toHaveAttribute('data-active-clip', 'start_a', { timeout: 12_000 });
   await page.getByRole('button', { name: 'Stop all' }).click();
 });

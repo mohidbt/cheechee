@@ -30,9 +30,9 @@ test('a pending manual request cannot start Autopilot and a transition changes t
   sendTransition!();
   await expect.poll(() => toolResult?.result?.results?.[0]?.ok).toBe(true);
   await expect(page.getByRole('switch', { name: 'Autopilot' })).toBeEnabled();
-  await expect(page.getByRole('complementary', { name: 'Actions' }).getByText('crossfade transition completed.')).toBeVisible({ timeout: 8000 });
+  await expect(page.getByRole('complementary', { name: "cheechee's thoughts" }).getByText('crossfade transition completed.')).toBeVisible({ timeout: 8000 });
   await page.getByRole('switch', { name: 'Autopilot' }).click();
   await expect.poll(() => autonomyRequests).toBe(1);
-  await expect(page.getByRole('complementary', { name: 'Actions' }).getByText(/Agent unavailable/)).toHaveCount(0);
+  await expect(page.getByRole('complementary', { name: "cheechee's thoughts" }).getByText(/Agent unavailable/)).toHaveCount(0);
   await page.getByRole('button', { name: 'Stop all' }).click();
 });

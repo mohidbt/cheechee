@@ -30,9 +30,9 @@ test('Library analysis and a manual next-cue request show scheduled then complet
   await page.getByRole('button', { name: 'Send' }).click();
   await expect.poll(() => acknowledgement?.result?.results?.[0]?.scheduled).toBe(true);
   expect(acknowledgement.result.results[0].ok).toBe(true);
-  await expect(page.getByRole('complementary', { name: 'Actions' }).getByText(/Manual transition scheduled for next reviewed cue/)).toBeVisible();
-  await expect(page.getByRole('complementary', { name: 'Actions' }).getByText('Transition completed.', { exact: true })).toBeVisible({ timeout: 15_000 });
-  const actions = page.getByRole('complementary', { name: 'Actions' });
+  await expect(page.getByRole('complementary', { name: "cheechee's thoughts" }).getByText(/Manual transition scheduled for next reviewed cue/)).toBeVisible();
+  await expect(page.getByRole('complementary', { name: "cheechee's thoughts" }).getByText('Transition completed.', { exact: true })).toBeVisible({ timeout: 15_000 });
+  const actions = page.getByRole('complementary', { name: "cheechee's thoughts" });
   const committed = JSON.parse((await actions.locator('.activity-item').filter({ hasText: 'Manual next cue committed' }).locator('pre').textContent())!.split('\n').slice(1).join('\n'));
   const started = JSON.parse((await actions.locator('.activity-item').filter({ hasText: 'Transition started.' }).locator('pre').textContent())!.split('\n').slice(1).join('\n'));
   expect(committed.cue.fileSeconds).toBeCloseTo(2.681, 2);

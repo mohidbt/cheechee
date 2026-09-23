@@ -16,6 +16,12 @@ test('video fills first screen and controls remain available', async ({ page }) 
   await expect(page.getByRole('region', { name: 'Track library' })).not.toBeInViewport();
   await page.screenshot({ path: 'test-results/immersive-desktop.png' });
 
+  const controls = page.getByRole('button', { name: 'Controls' });
+  await controls.click();
+  await expect(controls).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('region', { name: 'DJ assistant' })).not.toBeInViewport();
+  await controls.click();
+  await expect(controls).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByRole('region', { name: 'DJ assistant' })).toBeInViewport();
   await expect(page.getByLabel('Performance deck A low EQ')).toBeVisible();
   await page.getByLabel('Performance deck A low EQ').focus();
@@ -35,6 +41,11 @@ test('mobile stage and touch controls', async ({ page }) => {
   const stage = page.getByRole('region', { name: 'DJ performance' });
   expect((await stage.boundingBox())?.height).toBe(844);
   await page.screenshot({ path: 'test-results/immersive-mobile.png' });
+  const controls = page.getByRole('button', { name: 'Controls' });
+  await controls.click();
+  await expect(controls).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('region', { name: 'DJ assistant' })).not.toBeInViewport();
+  await controls.click();
   await expect(page.getByRole('region', { name: 'DJ assistant' })).toBeInViewport();
   await expect(page.getByRole('button', { name: 'Hold to speak DJ command' })).toBeInViewport();
   await page.screenshot({ path: 'test-results/immersive-mobile-controls.png' });

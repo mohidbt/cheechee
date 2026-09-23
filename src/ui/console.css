@@ -134,7 +134,7 @@
 .stage-actions .activity-heading button{padding:4px 7px;font-size:10px}
 .performance-app .stage-actions .activity-feed{height:auto;max-height:min(270px,43dvh)}
 .stage-bottom{left:clamp(10px,2.4vw,32px);right:clamp(10px,2.4vw,32px);bottom:0;padding:0;z-index:6;max-height:92dvh;transform:translateY(calc(100% - 45px));transition:transform .25s ease;will-change:transform}
-.stage-bottom:hover,.stage-bottom:focus-within,.stage-bottom.is-pinned{transform:translateY(0)}
+.stage-bottom:hover,.stage-bottom.is-pinned{transform:translateY(0)}
 .tray-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;width:150px;height:45px;margin-left:auto;padding:0 14px;border:1px solid #ede9df88;border-bottom:0;border-radius:4px 4px 0 0;background:rgba(20,23,30,.84);color:#ede9df;font-size:12px;font-weight:600;backdrop-filter:blur(18px)}
 .tray-toggle span:last-child{font-size:18px;font-weight:400;line-height:1}
 .performance-tray{overflow-y:auto;max-height:calc(92dvh - 45px);border:1px solid #ede9df40;border-bottom:0;background:rgba(20,23,30,.93);backdrop-filter:blur(22px);scrollbar-color:#827b89 transparent}
@@ -255,3 +255,6 @@
  .mixer-reveal{display:block;width:100%;padding:10px 12px;border:0;border-top:1px solid #ede9df28;background:transparent;color:#c9c2cc;text-align:left;font-size:11px}
  .mixer-reveal:hover{color:#fff}
 }
+.stage-bottom.is-dismissed,.stage-bottom.is-dismissed:hover,.stage-bottom.is-dismissed:focus-within{transform:translateY(calc(100% - 45px))}
+.stage-bottom:has(.performance-tray:focus-within):not(.is-dismissed){transform:translateY(0)}
+@media(max-width:520px){.actions-toggle{font-size:10px;white-space:nowrap}}

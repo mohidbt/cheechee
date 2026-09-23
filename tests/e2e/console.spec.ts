@@ -16,8 +16,8 @@ test('manual mixing surface plays, processes, transitions, and stops audio', asy
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
-  await page.getByRole('button', { name: 'Actions' }).click();
-  await expect(page.getByRole('complementary', { name: 'Actions' })).toBeVisible();
+  await page.getByRole('button', { name: "cheechee's thoughts" }).click();
+  await expect(page.getByRole('complementary', { name: "cheechee's thoughts" })).toBeVisible();
   await page.getByText('Advanced controls', { exact: false }).click();
   await expect(page.getByRole('region', { name: 'DJ assistant' })).toBeVisible();
   await page.getByRole('button', { name: 'Controls' }).click();
@@ -132,9 +132,9 @@ test('agent tool call reaches the browser mixer and acknowledges its actual stat
   await expect(deck(page, 'A').getByText('On air')).toBeVisible();
   await expect(deck(page, 'A').getByLabel('Deck A low EQ')).toHaveValue('-8');
   await expect(deck(page, 'A').getByRole('button', { name: 'High pass' })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Actions' }).click();
-  await expect(page.getByRole('complementary', { name: 'Actions' }).getByText('Playing Melodic on deck A.', { exact: false }).first()).toBeVisible();
-  const actions = page.getByRole('complementary', { name: 'Actions' });
+  await page.getByRole('button', { name: "cheechee's thoughts" }).click();
+  await expect(page.getByRole('complementary', { name: "cheechee's thoughts" }).getByText('Playing Melodic on deck A.', { exact: false }).first()).toBeVisible();
+  const actions = page.getByRole('complementary', { name: "cheechee's thoughts" });
   await expect(actions.getByText('Play Melodic with less bass')).toBeVisible();
   await expect(actions.locator('.activity-tool').getByText('Details')).toHaveCount(4);
   await actions.locator('.activity-tool').getByText('Details').first().click();
@@ -171,8 +171,8 @@ test('Autopilot starts from an acknowledged decision and manual input pauses it 
   await expect.poll(() => acknowledgement?.result?.accepted).toBe(true);
   await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('Melodic')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('On air')).toBeVisible();
-  await page.getByRole('button', { name: 'Actions' }).click();
-  const actions = page.getByRole('complementary', { name: 'Actions' });
+  await page.getByRole('button', { name: "cheechee's thoughts" }).click();
+  const actions = page.getByRole('complementary', { name: "cheechee's thoughts" });
   await expect(actions.getByText(/Agent explanation: (Starting with Melodic|Moving to Loopy)/).first()).toBeVisible();
   await expect(actions.getByText('Started melodic.')).toBeVisible();
   await page.screenshot({ path: 'test-results/autopilot-ui.png', fullPage: true });
@@ -206,8 +206,8 @@ test('Stop all drops a manual request queued during an active fade', async ({ pa
   await expect(page.getByText('in progress')).toBeVisible();
   await page.getByRole('textbox', { name: 'DJ command' }).fill('Play the next song');
   await page.getByRole('button', { name: 'Send' }).click();
-  await page.getByRole('button', { name: 'Actions' }).click();
-  await expect(page.getByRole('complementary', { name: 'Actions' }).getByText('Manual request queued until the current transition finishes.')).toBeVisible();
+  await page.getByRole('button', { name: "cheechee's thoughts" }).click();
+  await expect(page.getByRole('complementary', { name: "cheechee's thoughts" }).getByText('Manual request queued until the current transition finishes.')).toBeVisible();
   expect(requests).toBe(0);
   await page.getByRole('button', { name: 'Stop all' }).click();
   await page.waitForTimeout(8500);
