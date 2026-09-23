@@ -14,7 +14,7 @@ test('Library analysis and a manual next-cue request show scheduled then complet
     });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Enable audio' }).click();
+  await page.getByRole('button', { name: 'Controls' }).click();
   const library = page.getByRole('region', { name: 'Track library' });
   await library.getByRole('button', { name: 'Analyze tracks' }).click();
   await expect(library.getByText(/BPM estimated/).first()).toBeVisible({ timeout: 25_000 });
@@ -38,8 +38,8 @@ test('Library analysis and a manual next-cue request show scheduled then complet
   expect(committed.cue.fileSeconds).toBeCloseTo(2.681, 2);
   expect(committed.cue.alignment).toBe('reviewed_pulse_grid');
   expect(Math.abs(started.audioTime - committed.targetAudioTime)).toBeLessThan(0.05);
-  await expect(page.getByRole('region', { name: 'Now playing' }).getByText('Loopy')).toBeVisible();
-  await page.getByRole('button', { name: 'Stop all audio' }).click();
+  await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('Loopy')).toBeVisible();
+  await page.getByRole('button', { name: 'Stop all' }).click();
 });
 
 test('Stop all cancels a scheduled manual cue before the next loop', async ({ page }) => {
@@ -53,7 +53,7 @@ test('Stop all cancels a scheduled manual cue before the next loop', async ({ pa
     if (message.type === 'tool_result') { acknowledgement = message; socket.send(JSON.stringify({ type: 'agent_status', requestId: message.requestId, status: 'idle' })); }
   }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'Enable audio' }).click();
+  await page.getByRole('button', { name: 'Controls' }).click();
   await page.getByText('Advanced controls', { exact: false }).click();
   const deck = page.getByRole('region', { name: 'Deck A' });
   await deck.getByLabel('Track to load on deck A').selectOption({ label: 'Melodic' });
@@ -63,7 +63,7 @@ test('Stop all cancels a scheduled manual cue before the next loop', async ({ pa
   await page.getByRole('textbox', { name: 'DJ command' }).fill('Move to Loopy at the next reviewed cue');
   await page.getByRole('button', { name: 'Send' }).click();
   await expect.poll(() => acknowledgement?.result?.results?.[0]?.scheduled).toBe(true);
-  await page.getByRole('button', { name: 'Stop all audio' }).click();
+  await page.getByRole('button', { name: 'Stop all' }).click();
   await page.waitForTimeout(7500);
-  expect(await page.getByRole('region', { name: 'Now playing' }).getByText('On air').count()).toBe(0);
+  expect(await page.getByRole('region', { name: 'Performance mixer' }).getByText('On air').count()).toBe(0);
 });

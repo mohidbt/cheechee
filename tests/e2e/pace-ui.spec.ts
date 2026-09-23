@@ -16,9 +16,9 @@ test('Autopilot pace setting reschedules one browser controller window', async (
   const pace = page.getByRole('combobox', { name: 'Time between changes' });
   await expect(pace).toHaveValue('20');
   await pace.selectOption('60');
-  await page.getByRole('button', { name: 'Enable audio' }).click();
+  await page.getByRole('button', { name: 'Controls' }).click();
   await page.getByRole('switch', { name: 'Autopilot' }).click();
-  await expect(page.getByRole('region', { name: 'Now playing' }).getByText('On air')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('On air')).toBeVisible({ timeout: 15_000 });
   expect(requests).toHaveLength(1);
   expect(requests[0].context.requestedChangeIntervalSeconds).toBe(60);
   await pace.selectOption('120');
@@ -32,8 +32,8 @@ test('Autopilot pace setting reschedules one browser controller window', async (
   expect(requests[1].desiredInSeconds).toBeLessThan(30);
   await page.waitForTimeout(500);
   expect(requests).toHaveLength(2);
-  expect(await page.getByRole('region', { name: 'Now playing' }).getByText('On air').count()).toBe(1);
+  expect(await page.getByRole('region', { name: 'Performance mixer' }).getByText('On air').count()).toBe(1);
   await pace.selectOption('60');
   await expect.poll(() => cancelled).toContain(requests[1].requestId);
-  await page.getByRole('button', { name: 'Stop all audio' }).click();
+  await page.getByRole('button', { name: 'Stop all' }).click();
 });

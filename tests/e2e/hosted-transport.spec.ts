@@ -34,15 +34,16 @@ test('hosted HTTP manual tool changes real audio and performance video', async (
     ] } });
   });
   await openHosted(page);
-  await page.getByRole('button', { name: 'Enable audio' }).click();
+  await page.getByRole('button', { name: 'Controls' }).click();
   await page.getByRole('textbox', { name: 'DJ command' }).fill('Play Melodic');
   await page.getByRole('button', { name: 'Send' }).click();
   await expect.poll(() => request?.type).toBe('request');
-  await expect(page.getByRole('region', { name: 'Now playing' }).getByText('Melodic')).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Now playing' }).getByText('On air')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('Melodic')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('On air')).toBeVisible();
   await expect(page.getByLabel('DJ performance video')).toHaveAttribute('data-active-clip', 'start_a', { timeout: 12_000 });
+  await page.getByRole('button', { name: 'Actions' }).click();
   await expect(page.getByRole('complementary', { name: 'Actions' }).locator('.activity-tool')).toHaveCount(2);
-  await page.getByRole('button', { name: 'Stop all audio' }).click();
+  await page.getByRole('button', { name: 'Stop all' }).click();
 });
 
 test('hosted HTTP autonomous decision starts playback through local acceptance', async ({ page }) => {
@@ -57,14 +58,15 @@ test('hosted HTTP autonomous decision starts playback through local acceptance',
     } });
   });
   await openHosted(page);
-  await page.getByRole('button', { name: 'Enable audio' }).click();
+  await page.getByRole('button', { name: 'Controls' }).click();
   await page.getByRole('switch', { name: 'Autopilot' }).click();
   await expect.poll(() => request?.type).toBe('autonomy_request');
-  await expect(page.getByRole('region', { name: 'Now playing' }).getByText('Melodic')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('region', { name: 'Now playing' }).getByText('On air')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('Melodic')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('On air')).toBeVisible();
+  await page.getByRole('button', { name: 'Actions' }).click();
   await expect(page.getByRole('complementary', { name: 'Actions' }).getByText('Agent explanation: Starting a steady local set.')).toBeVisible();
   await expect(page.getByLabel('DJ performance video')).toHaveAttribute('data-active-clip', 'start_a', { timeout: 12_000 });
-  await page.getByRole('button', { name: 'Stop all audio' }).click();
+  await page.getByRole('button', { name: 'Stop all' }).click();
 });
 
 test('hosted HTTP cancellation ignores a late autonomous response', async ({ page }) => {
@@ -85,13 +87,13 @@ test('hosted HTTP cancellation ignores a late autonomous response', async ({ pag
     } catch { /* The browser may have already aborted the request. */ }
   });
   await openHosted(page);
-  await page.getByRole('button', { name: 'Enable audio' }).click();
+  await page.getByRole('button', { name: 'Controls' }).click();
   await page.getByRole('switch', { name: 'Autopilot' }).click();
   await expect.poll(() => !!pending).toBe(true);
-  await page.getByRole('button', { name: 'Stop all audio' }).click();
+  await page.getByRole('button', { name: 'Stop all' }).click();
   release?.();
   await page.waitForTimeout(400);
-  await expect(page.getByRole('region', { name: 'Now playing' }).getByText('On air')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Performance mixer' }).getByText('On air')).toHaveCount(0);
   await expect(page.getByLabel('DJ performance video')).toHaveAttribute('data-active-clip', 'idle_hype');
   await expect(page.getByRole('switch', { name: 'Autopilot' })).toHaveAttribute('aria-checked', 'false');
 });

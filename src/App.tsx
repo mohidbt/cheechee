@@ -142,6 +142,7 @@ export default function App() {
   const queuedCommands = useRef<Array<{ command: Command; resolve: (result: Awaited<ReturnType<AudioEngine['execute']>>) => void }>>([]);
   const queuedRequest = useRef<string | null>(null);
   const queueGeneration = useRef(0);
+  const autopilotToggleGeneration = useRef(0);
   const bridgeRef = useRef<DJBridge | null>(null);
   const importedUrls = useRef<string[]>([]);
   const voiceStop = useRef<() => void>(() => {});
@@ -235,6 +236,7 @@ export default function App() {
       queuedCommands.current.splice(0).forEach(item => item.resolve({ ok: false, code: 'cancelled', message: 'Action cancelled.' }));
       queuedRequest.current = null;
       queueGeneration.current++;
+      autopilotToggleGeneration.current++;
       bridgeRef.current = null;
       unsubscribe(); observe();
       voiceStop.current();
@@ -243,6 +245,27 @@ export default function App() {
       engine.dispose();
     };
   }, [add, cancelSpeech, engine]);
+
+  useEffect(() => {
+    let active = true;
+    const unlock = () => {
+      if (!active || engine.getState().unlocked) return;
+      // Call resume during the gesture itself. A blocked mount attempt may still be pending.
+      void engine.unlock().then(() => { if (active) removeGestureListeners(); }).catch(() => {});
+    };
+    const pointer = () => unlock();
+    const keyboard = (event: KeyboardEvent) => { if (!event.repeat && !['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) unlock(); };
+    const removeGestureListeners = () => {
+      document.removeEventListener('pointerdown', pointer, true);
+      document.removeEventListener('touchstart', pointer, true);
+      document.removeEventListener('keydown', keyboard, true);
+    };
+    document.addEventListener('pointerdown', pointer, true);
+    document.addEventListener('touchstart', pointer, true);
+    document.addEventListener('keydown', keyboard, true);
+    unlock();
+    return () => { active = false; removeGestureListeners(); };
+  }, [engine]);
 
   const submit = useCallback((text: string) => {
     autopilotRef.current?.pause('Paused for manual request.');
@@ -253,9 +276,12 @@ export default function App() {
     else add({ kind: 'error', text: 'The agent is busy or disconnected.' });
   }, [add, engine]);
   const manual = useCallback(async (command: Command) => {
+    const generation = queueGeneration.current;
     autopilotRef.current?.pause('Paused for manual control.');
     autopilotRef.current?.cancelManualCue();
     try {
+      if (!engine.getState().unlocked) await engine.unlock();
+      if (generation !== queueGeneration.current) return;
       const result = engine.getState().transition && command.type !== 'get_dj_state'
         ? await new Promise<Awaited<ReturnType<AudioEngine['execute']>>>(resolve => { queuedCommands.current.push({ command, resolve }); add({ kind: 'system', text: 'Manual action queued until the current transition finishes.', status: 'scheduled' }); })
         : command.type === 'transition' && command.timing === 'next_cue' ? await autopilotRef.current?.scheduleManualCue(command) || { ok: false, code: 'controller_unavailable', message: 'Cue scheduler is unavailable.' } : await engine.execute(command);
@@ -263,6 +289,7 @@ export default function App() {
     } catch (error) { add({ kind: 'error', text: message(error), detail: JSON.stringify(command, null, 2), status: 'failed' }); }
   }, [add, engine]);
   const stopAll = useCallback(() => {
+    autopilotToggleGeneration.current++;
     autopilotRef.current?.stopAll();
     queuedRequest.current = null;
     queueGeneration.current++;
@@ -307,5 +334,5 @@ export default function App() {
   }, [add, analyzing, engine]);
 
   const agentReady = connected && services?.agent === true && !busy;
-  return <Console state={state} tracks={tracks} engine={engine} connected={connected} services={services} busy={busy} activities={activities} analyses={analyses} analyzing={analyzing} onAnalyze={() => void analyzeLibrary()} autopilot={autopilot} onAutopilotToggle={() => { if (autopilot.mode === 'running') autopilotRef.current?.disable(); else if (!analyzing) { if (bridgeRef.current?.isManualBusy()) add({ kind: 'system', text: 'Wait for the current DJ request to finish before starting Autopilot.' }); else autopilotRef.current?.enable(); } }} onObjectiveChange={value => autopilotRef.current?.setObjective(value)} onChangeInterval={value => autopilotRef.current?.setChangeInterval(value)} onManualIntent={() => { autopilotRef.current?.pause('Paused for manual control.'); autopilotRef.current?.cancelManualCue(); }} onCommand={manual} onSubmit={submit} onStopAll={stopAll} videoResetKey={videoResetKey} onImport={importFiles} speechToggle={<button type="button" className="speech-toggle" aria-pressed={speechOn} onClick={() => { setSpeechOn(value => !value); cancelSpeech(); }}>{speechOn ? 'Voice reply on' : 'Voice reply off'}</button>} voiceControls={<VoiceInput enabled={agentReady && services?.speech === true} engine={engine} onSubmit={submit} onStart={() => { autopilotRef.current?.pause('Paused for voice control.'); autopilotRef.current?.cancelManualCue(); }} onError={text => add({ kind: 'error', text })} stopRef={voiceStop} cancelSpeech={cancelSpeech} />} />;
+  return <Console state={state} tracks={tracks} engine={engine} connected={connected} services={services} busy={busy} activities={activities} analyses={analyses} analyzing={analyzing} onAnalyze={() => void analyzeLibrary()} autopilot={autopilot} onAutopilotToggle={() => { const generation = ++autopilotToggleGeneration.current; if (autopilot.mode === 'running') { autopilotRef.current?.disable(); return; } if (analyzing) return; if (bridgeRef.current?.isManualBusy()) { add({ kind: 'system', text: 'Wait for the current DJ request to finish before starting Autopilot.' }); return; } void (async () => { try { if (!engine.getState().unlocked) await engine.unlock(); if (generation === autopilotToggleGeneration.current) autopilotRef.current?.enable(); } catch (error) { if (generation === autopilotToggleGeneration.current) add({ kind: 'error', text: `Audio could not start: ${message(error)}` }); } })(); }} onObjectiveChange={value => autopilotRef.current?.setObjective(value)} onChangeInterval={value => autopilotRef.current?.setChangeInterval(value)} onManualIntent={() => { autopilotRef.current?.pause('Paused for manual control.'); autopilotRef.current?.cancelManualCue(); }} onCommand={manual} onSubmit={submit} onStopAll={stopAll} videoResetKey={videoResetKey} onImport={importFiles} speechToggle={<button type="button" className="speech-toggle" aria-pressed={speechOn} onClick={() => { setSpeechOn(value => !value); cancelSpeech(); }}>{speechOn ? 'Voice reply on' : 'Voice reply off'}</button>} voiceControls={<VoiceInput enabled={agentReady && services?.speech === true} engine={engine} onSubmit={submit} onStart={() => { autopilotRef.current?.pause('Paused for voice control.'); autopilotRef.current?.cancelManualCue(); }} onError={text => add({ kind: 'error', text })} stopRef={voiceStop} cancelSpeech={cancelSpeech} />} />;
 }

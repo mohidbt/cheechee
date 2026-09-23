@@ -11,7 +11,7 @@ test('filmed DJ follows real audio execution and Stop all returns to idle', asyn
   await expect(idle).toHaveJSProperty('playsInline', true);
   await expect.poll(() => idle.evaluate(video => (video as HTMLVideoElement).currentTime)).toBeGreaterThan(0);
 
-  await page.getByRole('button', {name:'Enable audio'}).click();
+  await page.getByRole('button', {name:'Controls'}).click();
   await page.getByText('Advanced controls', {exact:false}).click();
   const deckA = page.getByRole('region', {name:'Deck A'});
   await deckA.getByLabel('Track to load on deck A').selectOption({label:'Melodic'});
@@ -35,7 +35,7 @@ test('filmed DJ follows real audio execution and Stop all returns to idle', asyn
   await expect(stage).toHaveAttribute('data-pending-clip', 'crossfade_to_b');
   await expect(stage).toHaveAttribute('data-active-clip', 'crossfade_to_b', {timeout:10_000});
   await expect(page.getByRole('region', {name:'Deck B', exact:true}).getByText('On air')).toBeVisible();
-  await page.getByRole('button', {name:'Stop all audio'}).click();
+  await page.getByRole('button', {name:'Stop all'}).click();
   await expect(stage).toHaveAttribute('data-active-clip', 'idle_hype');
   await page.waitForTimeout(400);
   await expect(stage).toHaveAttribute('data-active-clip', 'idle_hype');

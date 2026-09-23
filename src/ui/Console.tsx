@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import type { AudioEngine, AudioTrack, Command, DeckId, DeckState, DJState, ServiceStatus, TrackAnalysis } from '../../shared/contracts';
 import { demoCueSets } from '../../shared/catalog';
 import type { AutopilotStatus } from '../autopilot/controller';
@@ -39,7 +39,6 @@ export type ConsoleProps = {
   speechToggle?: ReactNode;
 };
 
-const examples = ['Play something energetic', 'Cut the bass', 'Echo into the next track'];
 const fmt = (seconds: number) => {
   const safe = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
   return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
@@ -90,7 +89,7 @@ function Scope({ deck, engine, playing }: { deck: DeckId; engine: AudioEngine; p
   return <div className="scope-shell"><canvas ref={canvas} className="scope-canvas" aria-label={`Live waveform for deck ${deck}`} role="img" /><div className="scope-meter" aria-hidden="true"><div ref={meter} className="scope-meter-fill" /></div></div>;
 }
 
-function EQControl({ deck, band, value, state, onCommand, labelPrefix = 'Deck' }: { deck: DeckId; band: 'low' | 'mid' | 'high'; value: number; state: DeckState; onCommand: ConsoleProps['onCommand']; labelPrefix?: string }) {
+function EQControl({ deck, band, value, state, onCommand, labelPrefix = 'Deck', rotary = false }: { deck: DeckId; band: 'low' | 'mid' | 'high'; value: number; state: DeckState; onCommand: ConsoleProps['onCommand']; labelPrefix?: string; rotary?: boolean }) {
   const [draft, setDraft] = useState(value);
   const lastSent = useRef(value);
   useEffect(() => { setDraft(value); lastSent.current = value; }, [value]);
@@ -99,7 +98,7 @@ function EQControl({ deck, band, value, state, onCommand, labelPrefix = 'Deck' }
     lastSent.current = draft;
     void onCommand({ type: 'set_eq', deck, low_db: band === 'low' ? draft : state.eq.low, mid_db: band === 'mid' ? draft : state.eq.mid, high_db: band === 'high' ? draft : state.eq.high });
   };
-  return <label className="eq-control"><span>{band}</span><input aria-label={`${labelPrefix} ${deck} ${band} EQ`} type="range" min="-24" max="6" step="1" value={draft} onChange={e => setDraft(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} onBlur={commit} /><output>{draft > 0 ? '+' : ''}{draft}</output></label>;
+  return <label className={`eq-control ${rotary ? "rotary-control" : ""}`}><span>{band}</span><span className="rotary-face" style={{ "--angle": `${-135 + (draft + 24) / 30 * 270}deg`, "--fill": `${(draft + 24) / 30 * 100}%` } as CSSProperties}><input aria-label={`${labelPrefix} ${deck} ${band} EQ`} type="range" min="-24" max="6" step="1" value={draft} onChange={e => setDraft(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} onBlur={commit} /></span><output>{draft > 0 ? "+" : ""}{draft}</output></label>;
 }
 
 function Deck({ id, deck, track, tracks, engine, onCommand }: { id: DeckId; deck: DeckState; track?: AudioTrack; tracks: AudioTrack[]; engine: AudioEngine; onCommand: ConsoleProps['onCommand'] }) {
@@ -127,7 +126,7 @@ function Deck({ id, deck, track, tracks, engine, onCommand }: { id: DeckId; deck
 function PerformanceDeck({ id, deck, track, engine, onCommand }: { id: DeckId; deck: DeckState; track?: AudioTrack; engine: AudioEngine; onCommand: ConsoleProps['onCommand'] }) {
   return <section className="performance-deck" aria-label={`Performance deck ${id}`}>
     <div className="performance-deck-heading"><span className="performance-deck-id">{id}</span><div><strong>{track?.title || 'Empty deck'}</strong><small>{deck.status === 'playing' ? 'On air' : deck.status}</small></div><time>{fmt(deck.position)}</time></div>
-    <div className="performance-eq">{(['low', 'mid', 'high'] as const).map(band => <EQControl key={band} deck={id} band={band} value={deck.eq[band]} state={deck} onCommand={onCommand} labelPrefix="Performance deck" />)}</div>
+    <div className="performance-eq">{(['low', 'mid', 'high'] as const).map(band => <EQControl key={band} deck={id} band={band} value={deck.eq[band]} state={deck} onCommand={onCommand} labelPrefix="Performance deck" rotary />)}</div>
     <label className="performance-gain"><span>Gain</span><input aria-label={`Performance deck ${id} gain`} type="range" min="0" max="1" step="0.01" value={deck.volume} onChange={event => engine.setDeckVolume(id, Number(event.target.value))} /><output>{Math.round(deck.volume * 100)}%</output></label>
   </section>;
 }
@@ -139,51 +138,73 @@ export function Console({ state, tracks, engine, connected, services, busy, acti
   const [style, setStyle] = useState<'crossfade' | 'filter' | 'echo'>('crossfade');
   const [duration, setDuration] = useState(4);
   const [transitionTrack, setTransitionTrack] = useState('');
+  const [trayPinned, setTrayPinned] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [unlockError, setUnlockError] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
-  const currentTrack = (id: DeckId) => tracks.find(t => t.id === state.decks[id].trackId);
-  const nextTrack = transitionTrack && tracks.some(t => t.id === transitionTrack) ? transitionTrack : (tracks.find(t => t.id !== state.decks.A.trackId && t.id !== state.decks.B.trackId)?.id || tracks[0]?.id || '');
+  const currentTrack = (id: DeckId) => tracks.find(track => track.id === state.decks[id].trackId);
+  const nextTrack = transitionTrack && tracks.some(track => track.id === transitionTrack)
+    ? transitionTrack
+    : tracks.find(track => track.id !== state.decks.A.trackId && track.id !== state.decks.B.trackId)?.id || tracks[0]?.id || '';
   const agentReady = connected && services?.agent === true;
-  const nextAutopilotTrack = autopilot.nextTrackId ? tracks.find(track => track.id === autopilot.nextTrackId) : null;
+  const activeDeck: DeckId | null = state.transition?.from || (state.decks.A.status === 'playing' ? 'A' : state.decks.B.status === 'playing' ? 'B' : null);
   const bpmFor = (id: DeckId) => {
     const trackId = state.decks[id].trackId;
     const reviewed = trackId ? demoCueSets[trackId]?.reviewedPulseGrid?.bpm : null;
-    if (reviewed) return `${reviewed} BPM · reviewed pulse`;
+    if (reviewed) return `${reviewed} BPM`;
     const estimated = trackId ? (analyses[trackId] || engine.getTrackAnalysis(trackId))?.estimatedTempo?.bpm : null;
-    return estimated ? `~${estimated} BPM · estimated` : 'BPM unknown';
+    return estimated ? `~${estimated} BPM` : 'BPM unknown';
   };
-  const activeDeck: DeckId | null = state.transition?.from || (state.decks.A.status === 'playing' ? 'A' : state.decks.B.status === 'playing' ? 'B' : null);
-  const bpmLine = state.transition ? `A ${bpmFor('A')} / B ${bpmFor('B')}` : activeDeck ? `Deck ${activeDeck} · ${bpmFor(activeDeck)}` : 'BPM unknown';
-  const autopilotLine = autopilot.mode === 'running' && autopilot.phase === 'ready' && nextAutopilotTrack && autopilot.secondsUntilNext !== null
-    ? `Playing ${currentTrack('A')?.title && state.decks.A.status === 'playing' ? currentTrack('A')?.title : currentTrack('B')?.title || 'now'}. Next: ${nextAutopilotTrack.title} in ${Math.round(autopilot.secondsUntilNext)}s.`
-    : autopilot.line;
-  const submit = (event: FormEvent) => { event.preventDefault(); const trimmed = text.trim(); if (!trimmed || busy || !agentReady) return; onSubmit(trimmed); setText(''); };
-  const importFiles = (files: FileList | null) => { if (files?.length) onImport(Array.from(files)); };
-  const unlock = async () => { try { await engine.unlock(); setUnlockError(''); } catch (error) { setUnlockError(error instanceof Error ? error.message : 'Audio could not start. Try again.'); } };
+  const bpmLine = activeDeck ? bpmFor(activeDeck) : 'BPM unknown';
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const trimmed = text.trim();
+    if (!trimmed || busy || !agentReady) return;
+    onSubmit(trimmed);
+    setText('');
+  };
+  const unlock = async () => {
+    try { await engine.unlock(); setUnlockError(''); }
+    catch { setUnlockError('Sound is blocked. Tap Enable sound to try again.'); }
+  };
   return <main className="dj-app performance-app">
-    <div className="performance-stage" aria-label="DJ performance">
+    <section className="performance-stage" aria-label="DJ performance">
       <VideoStage engine={engine} resetKey={videoResetKey} />
       <div className="stage-shade" aria-hidden="true" />
       <header className="stage-header">
-        <div className="stage-identity"><strong>Cheechee</strong><span className="stage-live"><i aria-hidden="true" />{state.decks.A.status === 'playing' || state.decks.B.status === 'playing' ? 'Live mix' : 'Ready to mix'}</span><span className="stage-bpm">{bpmLine}</span></div>
-        <div className="stage-actions-top"><span className={`connection-state ${agentReady ? 'online' : ''}`}><span className="status-dot" />{agentReady ? 'Agent online' : !connected ? 'Agent disconnected' : 'Agent unavailable'}</span><button type="button" className="stop-all" onClick={onStopAll}>■ <span>Stop all audio</span></button></div>
+        <div className="stage-identity"><img className="stage-mark" src="/cheechee-mark.png" alt="" /><strong>Cheechee</strong><span className="stage-bpm">{bpmLine}</span></div>
+        <div className="stage-actions-top">
+          <button type="button" className="actions-toggle" aria-expanded={actionsOpen} aria-controls="live-actions" onClick={() => setActionsOpen(value => !value)}>Actions{busy ? <span className="working-dot" aria-label="Agent working" /> : null}</button>
+          <button type="button" className="stop-all" onClick={onStopAll}>Stop all</button>
+        </div>
       </header>
-      {!state.unlocked && <div className="audio-gate stage-audio-gate"><div><strong>Sound is off</strong><span>Enable audio to play and mix tracks in this browser.</span></div><button onClick={() => void unlock()}>Enable audio</button>{unlockError && <p role="alert">{unlockError}</p>}</div>}
-      <aside className="actions-panel stage-actions" aria-label="Actions"><div className="activity-heading"><strong>Actions</strong><span>{busy ? 'Agent working…' : activities.length ? 'Live command log' : 'Actions appear here'}</span></div><div className="activity-feed" aria-live="polite">{activities.length === 0 ? <p className="empty-copy">Play a track or ask the DJ to begin. Agent actions and results appear here.</p> : activities.slice(-12).reverse().map(item => <div className={`activity-item activity-${item.kind}`} key={item.id}><span className="activity-symbol" aria-hidden="true">{item.kind === 'tool' ? '⌘' : item.kind === 'error' ? '!' : item.kind === 'user' ? '›' : '•'}</span><div><div className="activity-main"><span>{item.text}</span>{item.status && <small className={`activity-status status-${item.status}`}>{item.status}</small>}</div>{item.detail && <details><summary>{item.kind === 'tool' ? 'Tool details' : 'Details'}</summary><pre>{item.detail}</pre></details>}</div><time dateTime={new Date(item.time).toISOString()}>{new Date(item.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</time></div>)}</div></aside>
-      <div className="stage-bottom">
-        <section className="now-playing" aria-label="Now playing"><div className="now-heading"><strong>Now playing</strong><span>{state.transition ? `${state.transition.style} · ${Math.round(state.transition.progress * 100)}%` : 'Two live decks'}</span></div><div className="now-decks">{(['A', 'B'] as const).map(id => { const deck = state.decks[id]; const track = currentTrack(id); return <div className={`now-deck now-deck-${id.toLowerCase()}`} key={id}><span className="now-id">{id}</span><div className="now-track"><strong>{track?.title || 'No track loaded'}</strong><span>{track?.artist || 'Standby'}</span></div><span className="now-status">{deck.status === 'playing' ? 'On air' : deck.status}</span><span className="now-time">{fmt(deck.position)} / {fmt(deck.duration)}</span></div>; })}</div></section>
-        <section className="performance-mixer" aria-label="Performance mixer" onPointerDownCapture={onManualIntent} onKeyDownCapture={onManualIntent}>
-          <PerformanceDeck id="A" deck={state.decks.A} track={currentTrack('A')} engine={engine} onCommand={onCommand} />
-          <div className="performance-master"><label><span>Crossfader</span><input aria-label="Performance crossfader" type="range" min="0" max="1" step="0.01" value={state.crossfader} onChange={event => engine.setCrossfader(Number(event.target.value))} /><output>A {Math.round(state.crossfader * 100)} B</output></label><label><span>Master</span><input aria-label="Performance master volume" type="range" min="0" max="1" step="0.01" value={state.masterVolume} onChange={event => engine.setMasterVolume(Number(event.target.value))} /><output>{Math.round(state.masterVolume * 100)}%</output></label></div>
-          <PerformanceDeck id="B" deck={state.decks.B} track={currentTrack('B')} engine={engine} onCommand={onCommand} />
-        </section>
+      <aside id="live-actions" className={`actions-panel stage-actions ${actionsOpen ? 'is-open' : ''}`} aria-label="Actions" inert={!actionsOpen}>
+        <div className="activity-heading"><strong>Actions</strong><button type="button" aria-label="Close actions" onClick={() => setActionsOpen(false)}>Close</button></div>
+        <div className="activity-feed" aria-live="polite">{activities.length === 0 ? <p className="empty-copy">Actions will appear here.</p> : activities.slice(-12).reverse().map(item => <div className={`activity-item activity-${item.kind}`} key={item.id}><span className="activity-symbol" aria-hidden="true">{item.kind === 'tool' ? '⌘' : item.kind === 'error' ? '!' : item.kind === 'user' ? '›' : '•'}</span><div><div className="activity-main"><span>{item.text}</span>{item.status && <small className={`activity-status status-${item.status}`}>{item.status}</small>}</div>{item.detail && <details><summary>Details</summary><pre>{item.detail}</pre></details>}</div><time dateTime={new Date(item.time).toISOString()}>{new Date(item.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</time></div>)}</div>
+      </aside>
+      <div className={`stage-bottom ${trayPinned ? 'is-pinned' : ''}`}>
+        <button type="button" className="tray-toggle" aria-expanded={trayPinned} aria-controls="performance-tray" onClick={() => setTrayPinned(value => !value)}><span>Controls</span><span aria-hidden="true">{trayPinned ? '⌄' : '⌃'}</span></button>
+        <div id="performance-tray" className="performance-tray">
+          <section className="performance-mixer" aria-label="Performance mixer" onPointerDownCapture={onManualIntent} onKeyDownCapture={onManualIntent}>
+            <PerformanceDeck id="A" deck={state.decks.A} track={currentTrack('A')} engine={engine} onCommand={onCommand} />
+            <div className="performance-master"><label><span>Crossfader</span><input aria-label="Performance crossfader" type="range" min="0" max="1" step="0.01" value={state.crossfader} onChange={event => engine.setCrossfader(Number(event.target.value))} /><output>A {Math.round(state.crossfader * 100)} B</output></label><label><span>Master</span><input aria-label="Performance master volume" type="range" min="0" max="1" step="0.01" value={state.masterVolume} onChange={event => engine.setMasterVolume(Number(event.target.value))} /><output>{Math.round(state.masterVolume * 100)}%</output></label></div>
+            <PerformanceDeck id="B" deck={state.decks.B} track={currentTrack('B')} engine={engine} onCommand={onCommand} />
+          </section>
+          <div className="stage-inputs">
+            <section className="assistant-input" aria-label="DJ assistant"><div className="stage-input-heading"><strong>Direct the mix</strong>{speechToggle}</div><form className="command-form" onSubmit={submit}><input aria-label="DJ command" value={text} onChange={event => { onManualIntent(); setText(event.target.value); }} placeholder={agentReady ? 'Tell Cheechee what to play or change' : 'Agent unavailable'} disabled={busy || !agentReady} /><button type="submit" disabled={busy || !agentReady || !text.trim()}>{busy ? 'Working' : 'Send'}</button></form>{voiceControls}</section>
+            <section className="autopilot-control" aria-label="Autopilot"><div className="autopilot-top"><strong>Autopilot</strong><button type="button" role="switch" aria-label="Autopilot" aria-checked={autopilot.mode === 'running'} disabled={analyzing || busy} onClick={onAutopilotToggle}>{autopilot.mode === 'running' ? 'On' : 'Off'}</button></div><div className="autopilot-settings"><label>Direction<input aria-label="Autopilot direction" maxLength={500} value={objective} onChange={event => setObjective(event.target.value)} onBlur={() => onObjectiveChange(objective)} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></label><label>Change every<select aria-label="Time between changes" value={autopilot.changeIntervalSeconds} onChange={event => onChangeInterval(Number(event.target.value))}><option value={20}>20 seconds</option><option value={60}>60 seconds</option><option value={120}>120 seconds</option></select></label></div><p role="status">{autopilot.line}</p></section>
+          </div>
+          {!state.unlocked && <div className="sound-fallback"><button type="button" onClick={() => void unlock()}>Enable sound</button>{unlockError && <span role="alert">{unlockError}</span>}</div>}
+        </div>
       </div>
-    </div>
-    <section className="library" aria-label="Track library"><div className="section-title"><div><strong>Library</strong><span>{tracks.length} tracks · local to this session</span></div><div className="library-actions"><button type="button" disabled={analyzing || autopilot.mode === 'running' || !tracks.length} onClick={onAnalyze}>{analyzing ? 'Analyzing…' : 'Analyze tracks'}</button><button onClick={() => fileInput.current?.click()}>＋ Import audio</button></div><input ref={fileInput} type="file" accept="audio/*" multiple hidden onChange={e => { importFiles(e.target.files); e.target.value = ''; }} /></div><div className="library-peek">{tracks.map(track => <span key={track.id}>{track.title}</span>)}</div><details className="library-drawer"><summary>Browse library</summary><div className="library-list" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); onImport(Array.from(e.dataTransfer.files)); }}>{tracks.length === 0 ? <p className="empty-copy">Drop audio files here to build your library.</p> : tracks.map((track, index) => <div className="library-row" key={track.id}><span className="track-index">{String(index + 1).padStart(2,'0')}</span><div><strong>{track.title}</strong><span>{track.artist}{analyses[track.id]?.estimatedTempo ? ` · ~${analyses[track.id]?.estimatedTempo?.bpm} BPM estimated` : ''}</span></div><span className="track-tags">{track.tags.slice(0,2).join(' / ')}</span><span className="track-energy">{track.energy}</span></div>)}</div><p className="drop-hint">Drop audio files here, up to 25 MB each.</p></details></section>
-    <details className="advanced-controls"><summary>Advanced controls <span>Decks, EQ, filter, mixer and transitions</span></summary><div className="mixing-surface" onPointerDownCapture={onManualIntent} onKeyDownCapture={onManualIntent} onChangeCapture={onManualIntent}><Deck id="A" deck={state.decks.A} track={currentTrack('A')} tracks={tracks} engine={engine} onCommand={onCommand} />
-      <section className="mixer" aria-label="Mixer"><div className="mixer-heading">MIXER<span>2 CHANNEL</span></div><div className="mixer-fader"><div className="mixer-pips" aria-hidden="true"><span>A</span><span>B</span></div><label htmlFor="crossfader">Crossfader</label><input id="crossfader" type="range" min="0" max="1" step="0.01" value={state.crossfader} onChange={e => engine.setCrossfader(Number(e.target.value))} /><div className="fader-values"><span>A</span><span>Center</span><span>B</span></div></div><label className="master-control"><span>Master output</span><input aria-label="Master volume" type="range" min="0" max="1" step="0.01" value={state.masterVolume} onChange={e => engine.setMasterVolume(Number(e.target.value))} /><output>{Math.round(state.masterVolume * 100)}%</output></label><div className="mixer-divider" />
-        <div className="transition-panel"><div className="panel-heading"><strong>Next move</strong><span>{state.transition ? `${state.transition.style} in progress` : 'Preset transition'}</span></div><select aria-label="Next track" value={nextTrack} onChange={e => setTransitionTrack(e.target.value)}>{tracks.length === 0 && <option value="">No tracks</option>}{tracks.map(t => <option key={t.id} value={t.id}>{t.title} · {t.artist}</option>)}</select><div className="style-grid">{(['crossfade','filter','echo'] as const).map(choice => <button key={choice} aria-pressed={style === choice} className={style === choice ? 'selected' : ''} onClick={() => setStyle(choice)}>{choice === 'crossfade' ? 'Crossfade' : choice === 'filter' ? 'Filter sweep' : 'Echo out'}</button>)}</div><label className="duration-line">Duration <select aria-label="Transition duration" value={duration} onChange={e => setDuration(Number(e.target.value))}><option value={2}>2 sec</option><option value={4}>4 sec</option><option value={8}>8 sec</option><option value={12}>12 sec</option></select></label><button className="transition-go" disabled={!nextTrack || !!state.transition} onClick={() => void onCommand({type:'transition',track_id:nextTrack,style,duration_seconds:duration})}>Start transition <span aria-hidden="true">↗</span></button>{state.transition && <div className="transition-progress"><div style={{width:`${state.transition.progress * 100}%`}} /></div>}</div></section>
-      <Deck id="B" deck={state.decks.B} track={currentTrack('B')} tracks={tracks} engine={engine} onCommand={onCommand} /></div></details>
-    <section className="input-strip" aria-label="DJ controls"><div className="input-strip-top"><div className="autopilot-control"><div className="autopilot-top"><strong>Autopilot</strong><button type="button" role="switch" aria-label="Autopilot" aria-checked={autopilot.mode === 'running'} disabled={analyzing || busy} onClick={onAutopilotToggle}>{autopilot.mode === 'running' ? 'On' : 'Off'}</button></div><label>Time between changes<select aria-label="Time between changes" value={autopilot.changeIntervalSeconds} onChange={e => onChangeInterval(Number(e.target.value))}><option value={20}>About 20 seconds</option><option value={60}>About 60 seconds</option><option value={120}>About 120 seconds</option></select></label><label>Set objective<input aria-label="Set objective" maxLength={500} value={objective} onChange={e => setObjective(e.target.value)} onBlur={() => onObjectiveChange(objective)} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }} /></label><p role="status">{autopilotLine}</p></div><section className="assistant-input" aria-label="DJ assistant"><div className="section-title"><div><strong>Direct the mix</strong><span>{busy ? 'Working on your request…' : agentReady ? 'Tell the DJ what to do next' : connected ? 'Set NEBIUS_API_KEY and NEBIUS_MODEL in .env to enable the agent' : 'Agent server disconnected. Manual controls still work.'}</span></div>{speechToggle}</div><div className="example-chips">{examples.map(example => <button key={example} disabled={busy || !agentReady} onClick={() => { onSubmit(example); setText(''); }}>{example}</button>)}</div><form className="command-form" onSubmit={submit}><input aria-label="DJ command" value={text} onChange={e => { onManualIntent(); setText(e.target.value); }} placeholder={agentReady ? 'Ask for a track, change the sound, or cue a transition…' : 'Agent unavailable. Manual controls still work.'} disabled={busy || !agentReady} /><button type="submit" disabled={busy || !agentReady || !text.trim()}>{busy ? 'Working' : 'Send'} <span aria-hidden="true">↗</span></button></form>{voiceControls}</section></div></section>
+    </section>
+    <section className="understage" aria-label="More DJ controls">
+      <div className="understage-heading"><span>Mix workspace</span><span className={`connection-state ${agentReady ? 'online' : ''}`}><span className="status-dot" />{agentReady ? 'Agent online' : 'Agent unavailable'}</span></div>
+      <details className="advanced-controls"><summary>Advanced controls <span>Deck transport, effects and transitions</span></summary><div className="mixing-surface" onPointerDownCapture={onManualIntent} onKeyDownCapture={onManualIntent} onChangeCapture={onManualIntent}><Deck id="A" deck={state.decks.A} track={currentTrack('A')} tracks={tracks} engine={engine} onCommand={onCommand} />
+        <section className="mixer" aria-label="Mixer"><div className="mixer-heading">Mixer</div><div className="mixer-fader"><div className="mixer-pips" aria-hidden="true"><span>A</span><span>B</span></div><label htmlFor="crossfader">Crossfader</label><input id="crossfader" type="range" min="0" max="1" step="0.01" value={state.crossfader} onChange={event => engine.setCrossfader(Number(event.target.value))} /><div className="fader-values"><span>A</span><span>Center</span><span>B</span></div></div><label className="master-control"><span>Master output</span><input aria-label="Master volume" type="range" min="0" max="1" step="0.01" value={state.masterVolume} onChange={event => engine.setMasterVolume(Number(event.target.value))} /><output>{Math.round(state.masterVolume * 100)}%</output></label><div className="mixer-divider" />
+          <div className="transition-panel"><div className="panel-heading"><strong>Next move</strong><span>{state.transition ? `${state.transition.style} in progress` : 'Transition'}</span></div><select aria-label="Next track" value={nextTrack} onChange={event => setTransitionTrack(event.target.value)}>{tracks.length === 0 && <option value="">No tracks</option>}{tracks.map(track => <option key={track.id} value={track.id}>{track.title} · {track.artist}</option>)}</select><div className="style-grid">{(['crossfade','filter','echo'] as const).map(choice => <button key={choice} aria-pressed={style === choice} className={style === choice ? 'selected' : ''} onClick={() => setStyle(choice)}>{choice === 'crossfade' ? 'Crossfade' : choice === 'filter' ? 'Filter sweep' : 'Echo out'}</button>)}</div><label className="duration-line">Duration <select aria-label="Transition duration" value={duration} onChange={event => setDuration(Number(event.target.value))}><option value={2}>2 sec</option><option value={4}>4 sec</option><option value={8}>8 sec</option><option value={12}>12 sec</option></select></label><button className="transition-go" disabled={!nextTrack || !!state.transition} onClick={() => void onCommand({type:'transition',track_id:nextTrack,style,duration_seconds:duration})}>Start transition</button>{state.transition && <div className="transition-progress"><div style={{width:`${state.transition.progress * 100}%`}} /></div>}</div></section>
+        <Deck id="B" deck={state.decks.B} track={currentTrack('B')} tracks={tracks} engine={engine} onCommand={onCommand} /></div></details>
+      <section className="library" aria-label="Track library"><div className="section-title"><div><strong>Library</strong><span>{tracks.length} tracks</span></div><div className="library-actions"><button type="button" disabled={analyzing || autopilot.mode === 'running' || !tracks.length} onClick={onAnalyze}>{analyzing ? 'Analyzing…' : 'Analyze tracks'}</button><button type="button" onClick={() => fileInput.current?.click()}>Import audio</button></div><input ref={fileInput} type="file" accept="audio/*" multiple hidden onChange={event => { if (event.target.files?.length) onImport(Array.from(event.target.files)); event.target.value = ''; }} /></div><div className="library-list" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); onImport(Array.from(event.dataTransfer.files)); }}>{tracks.length === 0 ? <p className="empty-copy">Drop audio files here.</p> : tracks.map((track, index) => <div className="library-row" key={track.id}><span className="track-index">{String(index + 1).padStart(2,'0')}</span><div><strong>{track.title}</strong><span>{track.artist}{analyses[track.id]?.estimatedTempo ? ` · ~${analyses[track.id]?.estimatedTempo?.bpm} BPM` : ''}</span></div><span className="track-tags">{track.tags.slice(0,2).join(' / ')}</span><span className="track-energy">{track.energy}</span></div>)}</div></section>
+    </section>
   </main>;
 }

@@ -14,7 +14,7 @@ test('a pending manual request cannot start Autopilot and a transition changes t
     if (message.type === 'autonomy_request') autonomyRequests++;
   }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'Enable audio' }).click();
+  await page.getByRole('button', { name: 'Controls' }).click();
   await page.getByText('Advanced controls', { exact: false }).click();
   const deck = page.getByRole('region', { name: 'Deck A' });
   await deck.getByLabel('Track to load on deck A').selectOption({ label: 'Melodic' });
@@ -34,5 +34,5 @@ test('a pending manual request cannot start Autopilot and a transition changes t
   await page.getByRole('switch', { name: 'Autopilot' }).click();
   await expect.poll(() => autonomyRequests).toBe(1);
   await expect(page.getByRole('complementary', { name: 'Actions' }).getByText(/Agent unavailable/)).toHaveCount(0);
-  await page.getByRole('button', { name: 'Stop all audio' }).click();
+  await page.getByRole('button', { name: 'Stop all' }).click();
 });
