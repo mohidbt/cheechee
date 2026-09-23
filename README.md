@@ -1,6 +1,6 @@
 # Cheechee
 
-A local two-deck DJ console. The browser plays and mixes audio with Tone.js. A Nebius-backed LangChain agent handles manual requests through `apply_mix` and chooses tracks and transitions for Autopilot through `submit_dj_decision`. ElevenLabs provides optional push-to-talk transcription and spoken replies. Manual playback works without provider credentials.
+A local two-deck DJ console with a filmed performance view. The browser plays and mixes audio with Tone.js. Muted video clips follow actual audio actions and never control or delay the mix. A Nebius-backed LangChain agent handles manual requests through `apply_mix` and chooses tracks and transitions for Autopilot through `submit_dj_decision`. ElevenLabs provides optional push-to-talk transcription and spoken replies. Manual playback works without provider credentials.
 
 ## Start
 
@@ -8,7 +8,7 @@ Requires Node.js 22 or newer and npm. Run `npm install`, copy `.env.example` to 
 
 Click **Enable audio**, then switch **Autopilot** on to start a set. Its optional objective field defaults to a varied electronic set. **Time between changes** sets an approximate 20, 60, or 120-second target; 20 seconds is the default for both loops and longer songs. Cheechee prepares the next track while audio plays. A nearby cue or the time needed for a safe decision and fade may shift the handoff later; a short song may end sooner and use its prepared local fallback. Changing the setting during playback cancels an uncommitted plan and schedules a new one from the track's elapsed play time. It uses a four-second crossfade when the model is unavailable. The Actions panel shows actual decisions, explanations supplied by the model, local fallback reasons, preparation and playback events, and expandable request details.
 
-Manual playback remains available under **Advanced controls**. Load a track on deck A and press **Play**, or mix the three bundled Fupi loops with the crossfader, EQ, filters, and preset transitions. You can also import up to ten local audio files, each at most 25 MB. Local files stay in this browser session.
+The performance stage keeps deck EQ and gain, crossfader, master volume, Stop all, Actions, and voice/text controls in reach. BPM at the top is the reviewed pulse rate for a bundled loop, an explicitly approximate analyzed estimate, or unknown; it does not imply tempo matching. Manual loading, filters, and preset transitions remain available under **Advanced controls**. Load a track on deck A and press **Play**, or mix the three bundled Fupi loops. You can also import up to ten local audio files, each at most 25 MB. Local files stay in this browser session.
 
 Typing a manual command, beginning voice input, or changing an advanced audio control pauses Autopilot. A manual request made during an already committed transition waits until that fade finishes. A manual transition can request `timing: next_cue` when a reviewed exit window fits its fade; the tool acknowledges a scheduled move, then Actions reports actual start and completion. Immediate timing remains the default and an urgent request takes that path. A later manual input or **Stop all audio** cancels an uncommitted cue. Resume Autopilot with its switch. Stop all also disables Autopilot, cancels pending requests and prepared moves, and stops both decks. Turning Autopilot off without Stop all lets the current track continue.
 
@@ -26,7 +26,7 @@ Choose a tool-capable model ID available to your Nebius account. No model is har
 
 Restart `npm run dev` after editing `.env` so the Node server reads the new values.
 
-For optional voice controls, set `ELEVENLABS_API_KEY`. `ELEVENLABS_VOICE_ID` defaults to George (`JBFqnCBsd6RMkjVDRZzb`), and `ELEVENLABS_TTS_MODEL` defaults to `eleven_flash_v2_5`. Hold the microphone button to speak and release to send the committed transcript through the same agent path as text. The browser receives a short-lived Scribe token; it never receives the ElevenLabs API key. Replies are synthesized only after an acknowledged action. Use headphones to keep the music out of the microphone. Turn spoken replies off with the voice reply toggle if preferred.
+For optional voice controls, set `ELEVENLABS_API_KEY`. `ELEVENLABS_VOICE_ID` defaults to Sarah (`EXAVITQu4vr4xnSDxMaL`), and `ELEVENLABS_TTS_MODEL` defaults to `eleven_flash_v2_5`. Hold the microphone button to speak and release to send the committed transcript through the same agent path as text. The browser receives a short-lived Scribe token; it never receives the ElevenLabs API key. Replies are synthesized only after an acknowledged action. Use headphones to keep the music out of the microphone. Turn spoken replies off with the voice reply toggle if preferred.
 
 ## Checks
 

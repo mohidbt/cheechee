@@ -18,7 +18,7 @@ import {
 const ACK_TIMEOUT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const AUTONOMY_TIMEOUT_MS = 10_000;
-const DEFAULT_VOICE = 'JBFqnCBsd6RMkjVDRZzb';
+const DEFAULT_VOICE = 'EXAVITQu4vr4xnSDxMaL';
 const DEFAULT_BASE_URL = 'https://api.tokenfactory.nebius.com/v1/';
 
 const SYSTEM_PROMPT = `You operate a two-deck DJ demo through apply_mix. For an audio request, call apply_mix exactly once with one to four commands in execution order.
@@ -62,7 +62,7 @@ export const liveAutonomyAgentRunner: AutonomyAgentRunner = async (input, submit
   return messageText(result.messages.at(-1)?.content);
 };
 
-function envStatus(): ServiceStatus {
+export function envStatus(): ServiceStatus {
   const agent = Boolean(process.env.NEBIUS_API_KEY?.trim() && process.env.NEBIUS_MODEL?.trim());
   const speech = Boolean(process.env.ELEVENLABS_API_KEY?.trim());
   return { agent, speech, tts: speech && Boolean((process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE).trim()), model: agent ? process.env.NEBIUS_MODEL! : null };

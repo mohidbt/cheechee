@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
-const deck = (page: Page, id: 'A' | 'B') => page.getByRole('region', { name: `Deck ${id}` });
+const deck = (page: Page, id: 'A' | 'B') => page.getByRole('region', { name: `Deck ${id}`, exact: true });
 
 async function loadAndPlay(page: Page, id: 'A' | 'B', title: string) {
   const section = deck(page, id);
@@ -60,8 +60,8 @@ test('manual mixing surface plays, processes, transitions, and stops audio', asy
       await expect(deck(page, 'B').getByRole('button', { name: 'Off' })).toHaveAttribute('aria-pressed', 'true');
       await expect(deck(page, 'B').getByLabel('Deck B volume')).toHaveValue('0.8');
     }
-    if (source === 'A') await expect.poll(async () => Number(await page.getByLabel('Crossfader').inputValue())).toBeGreaterThan(0.05);
-    else await expect.poll(async () => Number(await page.getByLabel('Crossfader').inputValue())).toBeLessThan(0.95);
+    if (source === 'A') await expect.poll(async () => Number(await page.getByLabel('Crossfader', { exact: true }).inputValue())).toBeGreaterThan(0.05);
+    else await expect.poll(async () => Number(await page.getByLabel('Crossfader', { exact: true }).inputValue())).toBeLessThan(0.95);
     await expect(deck(page, source).getByText('Stopped')).toBeVisible({ timeout: 8000 });
     await expect(page.getByText('Preset transition')).toBeVisible();
   }
@@ -84,7 +84,7 @@ test('small screen remains usable and accepts a local track', async ({ page }) =
   await expect(page.getByText('Advanced controls', { exact: false })).toBeVisible();
   await page.screenshot({ path: 'test-results/console-mobile.png', fullPage: true });
   await page.locator('input[type=file]').setInputFiles('public/audio/melodicedm.wav');
-  await expect(page.getByRole('region', { name: 'Track library' }).getByText('melodicedm', { exact: true })).toBeVisible();
+  await expect(page.locator('.library-peek').getByText('melodicedm', { exact: true })).toBeVisible();
 });
 
 test('agent tool call reaches the browser mixer and acknowledges its actual state', async ({ page }) => {

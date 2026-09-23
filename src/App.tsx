@@ -132,6 +132,7 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [services, setServices] = useState<ServiceStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [videoResetKey, setVideoResetKey] = useState(0);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [analyses, setAnalyses] = useState<Record<string, TrackAnalysis | null>>({});
   const [analyzing, setAnalyzing] = useState(false);
@@ -270,6 +271,7 @@ export default function App() {
     cancelSpeech();
     bridgeRef.current?.cancel();
     engine.stopAll();
+    setVideoResetKey(value => value + 1);
     add({ kind: 'system', text: 'All audio stopped and pending DJ request cancelled.', status: 'completed' });
   }, [add, cancelSpeech, engine]);
   const importFiles = useCallback((files: File[]) => {
@@ -305,5 +307,5 @@ export default function App() {
   }, [add, analyzing, engine]);
 
   const agentReady = connected && services?.agent === true && !busy;
-  return <Console state={state} tracks={tracks} engine={engine} connected={connected} services={services} busy={busy} activities={activities} analyses={analyses} analyzing={analyzing} onAnalyze={() => void analyzeLibrary()} autopilot={autopilot} onAutopilotToggle={() => { if (autopilot.mode === 'running') autopilotRef.current?.disable(); else if (!analyzing) { if (bridgeRef.current?.isManualBusy()) add({ kind: 'system', text: 'Wait for the current DJ request to finish before starting Autopilot.' }); else autopilotRef.current?.enable(); } }} onObjectiveChange={value => autopilotRef.current?.setObjective(value)} onChangeInterval={value => autopilotRef.current?.setChangeInterval(value)} onManualIntent={() => { autopilotRef.current?.pause('Paused for manual control.'); autopilotRef.current?.cancelManualCue(); }} onCommand={manual} onSubmit={submit} onStopAll={stopAll} onImport={importFiles} speechToggle={<button type="button" className="speech-toggle" aria-pressed={speechOn} onClick={() => { setSpeechOn(value => !value); cancelSpeech(); }}>{speechOn ? 'Voice reply on' : 'Voice reply off'}</button>} voiceControls={<VoiceInput enabled={agentReady && services?.speech === true} engine={engine} onSubmit={submit} onStart={() => { autopilotRef.current?.pause('Paused for voice control.'); autopilotRef.current?.cancelManualCue(); }} onError={text => add({ kind: 'error', text })} stopRef={voiceStop} cancelSpeech={cancelSpeech} />} />;
+  return <Console state={state} tracks={tracks} engine={engine} connected={connected} services={services} busy={busy} activities={activities} analyses={analyses} analyzing={analyzing} onAnalyze={() => void analyzeLibrary()} autopilot={autopilot} onAutopilotToggle={() => { if (autopilot.mode === 'running') autopilotRef.current?.disable(); else if (!analyzing) { if (bridgeRef.current?.isManualBusy()) add({ kind: 'system', text: 'Wait for the current DJ request to finish before starting Autopilot.' }); else autopilotRef.current?.enable(); } }} onObjectiveChange={value => autopilotRef.current?.setObjective(value)} onChangeInterval={value => autopilotRef.current?.setChangeInterval(value)} onManualIntent={() => { autopilotRef.current?.pause('Paused for manual control.'); autopilotRef.current?.cancelManualCue(); }} onCommand={manual} onSubmit={submit} onStopAll={stopAll} videoResetKey={videoResetKey} onImport={importFiles} speechToggle={<button type="button" className="speech-toggle" aria-pressed={speechOn} onClick={() => { setSpeechOn(value => !value); cancelSpeech(); }}>{speechOn ? 'Voice reply on' : 'Voice reply off'}</button>} voiceControls={<VoiceInput enabled={agentReady && services?.speech === true} engine={engine} onSubmit={submit} onStart={() => { autopilotRef.current?.pause('Paused for voice control.'); autopilotRef.current?.cancelManualCue(); }} onError={text => add({ kind: 'error', text })} stopRef={voiceStop} cancelSpeech={cancelSpeech} />} />;
 }

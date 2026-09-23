@@ -16,13 +16,28 @@ export class DJBridge {
   private seenBatches = new Set<string>();
   private applied = false;
   private closed = false;
+  private httpConnected = false;
+  private manualAbort?: AbortController;
+  private autonomyAbort?: AbortController;
   private autonomy?: { requestId: string; onDecision: (message: Extract<ServerMessage, { type: 'dj_decision' }>) => Promise<DecisionAck> | DecisionAck; onFailure: (reason: string) => void; seen: boolean };
 
-  constructor(private engine: AudioEngine, private tracks: () => AudioTrack[], private onEvent: (event: BridgeEvent) => void, private executeCommand: (command: Command) => Promise<CommandResult> = command => engine.execute(command)) {}
+  constructor(private engine: AudioEngine, private tracks: () => AudioTrack[], private onEvent: (event: BridgeEvent) => void, private executeCommand: (command: Command) => Promise<CommandResult> = command => engine.execute(command), private transport: 'auto' | 'http' | 'ws' = 'auto') {}
+
+  private get httpMode() { return this.transport === 'http' || this.transport === 'auto' && import.meta.env.PROD; }
 
   isManualBusy() { return !!this.requestId; }
 
   connect() {
+    if (this.httpMode) {
+      if (this.closed || this.httpConnected) return;
+      void fetch('/api/status').then(response => {
+        if (this.closed) return;
+        this.httpConnected = response.ok;
+        this.onEvent({ type: 'connection', connected: response.ok });
+        if (!response.ok) this.retry = setTimeout(() => this.connect(), 1500);
+      }).catch(() => { if (!this.closed) { this.onEvent({ type: 'connection', connected: false }); this.retry = setTimeout(() => this.connect(), 1500); } });
+      return;
+    }
     if (this.closed || this.socket && (this.socket.readyState === WebSocket.CONNECTING || this.socket.readyState === WebSocket.OPEN)) return;
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socket = new WebSocket(`${protocol}//${location.host}/ws`);
@@ -49,28 +64,54 @@ export class DJBridge {
   }
 
   submit(text: string, context?: MusicalContext): boolean {
-    if (this.requestId || this.autonomy || this.socket?.readyState !== WebSocket.OPEN || !text.trim()) return false;
+    if (this.requestId || this.autonomy || !(this.httpMode ? this.httpConnected : this.socket?.readyState === WebSocket.OPEN) || !text.trim()) return false;
     const requestId = crypto.randomUUID();
     this.requestId = requestId;
     this.applied = false;
     this.onEvent({ type: 'busy', busy: true });
-    this.socket.send(JSON.stringify({
+    const message: ClientMessage = {
       type: 'request', requestId, text: text.trim(), state: this.engine.getState(),
       tracks: this.tracks().map(({ url: _url, ...track }) => track), context,
-    }));
+    };
+    if (this.httpMode) {
+      const abort = new AbortController();
+      this.manualAbort = abort;
+      void this.httpRequest(message, abort.signal).then(async raw => {
+        if (abort.signal.aborted || this.requestId !== requestId) return;
+        const response = ServerMessageSchema.parse(raw);
+        await this.receive(response);
+        if (response.type === 'tool_call' && !abort.signal.aborted && this.requestId === requestId) {
+          this.requestId = undefined;
+          this.onEvent({ type: 'busy', busy: false });
+        } else if (response.type === 'assistant_message' && this.requestId === requestId) {
+          this.requestId = undefined;
+          this.onEvent({ type: 'busy', busy: false });
+        }
+      }).catch(error => {
+        if (!abort.signal.aborted && this.requestId === requestId) void this.receive({ type: 'error', requestId, message: error instanceof Error ? error.message : 'Agent request failed.' });
+      }).finally(() => { if (this.manualAbort === abort) this.manualAbort = undefined; });
+    } else this.socket!.send(JSON.stringify(message));
     return true;
   }
 
   requestAutonomy(message: Extract<ClientMessage, { type: 'autonomy_request' }>, onDecision: (message: Extract<ServerMessage, { type: 'dj_decision' }>) => Promise<DecisionAck> | DecisionAck, onFailure: (reason: string) => void): boolean {
-    if (this.autonomy || this.requestId || this.socket?.readyState !== WebSocket.OPEN) return false;
+    if (this.autonomy || this.requestId || !(this.httpMode ? this.httpConnected : this.socket?.readyState === WebSocket.OPEN)) return false;
     this.autonomy = { requestId: message.requestId, onDecision, onFailure, seen: false };
-    this.socket.send(JSON.stringify(message));
+    if (this.httpMode) {
+      const abort = new AbortController();
+      this.autonomyAbort = abort;
+      void this.httpRequest(message, abort.signal).then(response => {
+        if (!abort.signal.aborted && this.autonomy?.requestId === message.requestId) void this.receive(ServerMessageSchema.parse(response));
+      }).catch(error => { if (!abort.signal.aborted && this.autonomy?.requestId === message.requestId) this.failAutonomy(error instanceof Error ? error.message : 'Autopilot request failed.'); })
+        .finally(() => { if (this.autonomyAbort === abort) this.autonomyAbort = undefined; });
+    } else this.socket!.send(JSON.stringify(message));
     return true;
   }
 
   cancelAutonomy() {
     const current = this.autonomy;
     this.autonomy = undefined;
+    this.autonomyAbort?.abort();
     if (current && this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: 'cancel', requestId: current.requestId }));
   }
 
@@ -82,6 +123,7 @@ export class DJBridge {
 
   cancel() {
     this.generation++;
+    this.manualAbort?.abort();
     if (this.requestId && this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: 'cancel', requestId: this.requestId }));
     this.requestId = undefined;
     this.applied = false;
@@ -94,6 +136,15 @@ export class DJBridge {
     this.cancel();
     this.cancelAutonomy();
     this.socket?.close();
+    if (this.httpConnected) this.onEvent({ type: 'connection', connected: false });
+    this.httpConnected = false;
+  }
+
+  private async httpRequest(message: ClientMessage, signal: AbortSignal): Promise<unknown> {
+    const response = await fetch('/api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(message), signal });
+    const value = await response.json();
+    if (!response.ok) throw new Error(typeof value?.error === 'string' ? value.error : 'Agent request failed.');
+    return value;
   }
 
   private async receive(message: ServerMessage) {
@@ -157,5 +208,6 @@ export class DJBridge {
     const result: BatchResult = { ok: !failed, message: summary, results, state: this.engine.getState() };
     this.applied = true;
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: 'tool_result', requestId: message.requestId, batchId: message.batchId, result }));
+    else if (this.httpMode && generation === this.generation && message.requestId === this.requestId) this.onEvent({ type: 'assistant', text: result.message, acknowledged: true });
   }
 }
