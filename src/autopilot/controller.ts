@@ -14,6 +14,7 @@ export type AutopilotTransport = {
 export type AutopilotClock = { now: () => number; setInterval: (fn: () => void, ms: number) => ReturnType<typeof setInterval>; clearInterval: (id: ReturnType<typeof setInterval>) => void; setTimeout: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>; clearTimeout: (id: ReturnType<typeof setTimeout>) => void };
 const browserClock: AutopilotClock = { now: () => performance.now(), setInterval: (fn, ms) => setInterval(fn, ms), clearInterval: id => clearInterval(id), setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: id => clearTimeout(id) };
 const MODEL_TIMEOUT = 10_000;
+const MAX_CLIENT_RESPONSE_TIME = 12_000;
 const PREPARATION_MARGIN_SECONDS = 5;
 const MIN_SAFE_PLANNING_LEAD_SECONDS = MODEL_TIMEOUT / 1000 + PREPARATION_MARGIN_SECONDS;
 const COMMIT_LEAD = 0.15;
@@ -177,7 +178,7 @@ export class AutopilotController {
     this.phase = 'idle';
     this.line = fade < 1 ? 'Track is too short for a safe fade. Preparing recovery at its natural end.' : `Playing ${this.tracks().find(t => t.id === source.trackId)?.title || source.trackId}. Planning the next move.`;
     this.trace(window.id, `Playback ${source.trackId} adopted. Next move in ${Math.round(desired - now)}s.`, JSON.stringify({ playbackId: source.playbackId, desiredAudioTime: desired, planningAudioTime: window.planning, cue: cue ? { kind: cue.kind, fileSeconds: cue.fileSeconds, provenance: cue.provenance, reviewed: cue.reviewed, alignment: cue.alignment } : null }), 'requested');
-    if (tooShortForDecision) this.trace(window.id, 'Using local fallback for a short track.', `Available lead ${remaining.toFixed(1)}s.`, 'fallback');
+    if (tooShortForDecision) this.trace(window.id, 'Preparing the next track.', `Short track: available lead ${remaining.toFixed(1)}s; automatic selection.`, 'fallback');
     void this.prepareFallback(window);
     this.tick();
   }
@@ -196,7 +197,7 @@ export class AutopilotController {
       if (!this.windowIsCurrent(window, epoch)) return;
       if (result.ok) {
         window.fallback = { trackId: track.id, style: 'crossfade', duration: window.fade, fallback: true, prepared: true, preparing: false };
-        this.trace(window.id, `Local fallback ready: ${track.title}.`, `Rule: least recently played eligible track; decode ${Math.round(this.clock.now() - started)} ms.`, 'ready');
+        this.trace(window.id, `Next track ready: ${track.title}.`, `Automatic selection: least recently played eligible track; decode ${Math.round(this.clock.now() - started)} ms.`, 'ready');
         if (!window.sourcePlaybackId && !window.chosen && !this.requestId && window.unavailableSince === undefined) void this.commitColdStart(window, 'Agent unavailable or timed out.');
         this.publish(); return;
       }
@@ -216,22 +217,25 @@ export class AutopilotController {
     const sent = this.bridge.requestAutonomy(request, reply => this.accept(window, epoch, requestId, reply), reason => this.failRequest(window, epoch, requestId, reason));
     if (!sent) {
       this.requestId = null; window.requested = false;
-      if (window.unavailableSince === undefined) { window.unavailableSince = this.clock.now(); this.trace(window.id, 'Waiting for the agent connection or current request. Local fallback is ready.', undefined, 'scheduled'); }
+      if (window.unavailableSince === undefined) { window.unavailableSince = this.clock.now(); this.trace(window.id, 'Preparing the next track.', 'Agent connection or current request is unavailable; automatic selection continues.', 'scheduled'); }
       this.phase = window.fallback?.prepared ? 'ready' : 'preparing'; this.publish(); return;
     }
     window.unavailableSince = undefined;
     this.phase = 'deciding'; this.line = trigger === 'cold_start' ? 'Choosing the first track.' : 'Choosing the next track.';
     this.trace(requestId, `Autopilot ${trigger.replace('_', ' ')}: deciding.`, JSON.stringify(request), 'requested'); this.publish();
-    this.timeout = this.clock.setTimeout(() => this.failRequest(window, epoch, requestId, 'Agent decision timed out.'), MODEL_TIMEOUT);
+    const responseTime = window.sourcePlaybackId
+      ? Math.min(MAX_CLIENT_RESPONSE_TIME, Math.max(0, (window.deadline - this.engine.getAudioTime()) * 1000 - 100))
+      : MAX_CLIENT_RESPONSE_TIME;
+    this.timeout = this.clock.setTimeout(() => this.failRequest(window, epoch, requestId, 'Agent decision timed out.'), responseTime);
   }
   private failRequest(window: Window, epoch: number, requestId: string, reason: string) {
     if (!this.windowIsCurrent(window, epoch) || this.requestId !== requestId) return;
-    this.clearRequest(); this.trace(requestId, `Local fallback: ${reason}`, `Model latency ${Math.round(this.clock.now() - this.requestStarted)} ms.`, 'fallback');
+    this.clearRequest(); this.trace(requestId, window.sourcePlaybackId ? 'Keeping the music going.' : 'Starting the music automatically.', `Reason: ${reason} Model latency ${Math.round(this.clock.now() - this.requestStarted)} ms.`, 'fallback');
     if (!window.sourcePlaybackId && window.fallback) void this.commitColdStart(window, reason);
     else { this.phase = window.fallback?.prepared ? 'ready' : 'preparing'; this.publish(); }
   }
   private async accept(window: Window, epoch: number, requestId: string, reply: Reply): Promise<DecisionAck> {
-    const reject = (message: string, code: string): DecisionAck => { if (this.requestId === requestId) this.clearRequest(false); this.trace(requestId, `Decision rejected: ${message}`, JSON.stringify(reply.decision), 'failed'); if (!window.sourcePlaybackId && window.fallback) void this.commitColdStart(window, message); return { accepted: false, message, code }; };
+    const reject = (message: string, code: string): DecisionAck => { if (this.requestId === requestId) this.clearRequest(false); this.trace(requestId, window.sourcePlaybackId ? 'Keeping the music going.' : 'Preparing another track.', `Decision not used: ${message}\n${JSON.stringify(reply.decision)}`, 'fallback'); if (!window.sourcePlaybackId && window.fallback) void this.commitColdStart(window, message); return { accepted: false, message, code }; };
     if (!this.windowIsCurrent(window, epoch) || this.requestId !== requestId || reply.sessionId !== this.sessionId || reply.controlRevision !== this.revision || reply.sourcePlaybackId !== window.sourcePlaybackId) return reject('Stale playback or revision.', 'stale');
     if (window.sourcePlaybackId && this.engine.getAudioTime() > window.deadline) return reject('Preparation deadline passed.', 'expired');
     const decision: Decision = reply.decision;
@@ -272,9 +276,9 @@ export class AutopilotController {
     const result = await this.engine.prepareTrack(plan.trackId);
     if (!this.windowIsCurrent(window, epoch) || window.chosen !== plan || window.committed) return;
     plan.preparing = false;
-    if (!result.ok) { this.unavailable.add(plan.trackId); window.chosen = null; this.trace(requestId, `Could not prepare ${title}; local fallback selected.`, result.message, 'failed'); if (!window.sourcePlaybackId && window.fallback) void this.commitColdStart(window, result.message); this.publish(); return; }
+    if (!result.ok) { this.unavailable.add(plan.trackId); window.chosen = null; this.trace(requestId, window.sourcePlaybackId ? 'Keeping the music going.' : 'Preparing another track.', `Could not prepare ${title}: ${result.message}; automatic selection continues.`, 'fallback'); if (!window.sourcePlaybackId && window.fallback) void this.commitColdStart(window, result.message); this.publish(); return; }
     plan.prepared = true; this.phase = 'ready'; this.line = window.sourcePlaybackId ? `Playing now. Next: ${title} in ${Math.round(Math.max(0, window.desired - this.engine.getAudioTime()))}s.` : `Starting ${title}.`;
-    this.trace(requestId, `${title} ready.`, `Decode ${Math.round(this.clock.now() - started)} ms.`, 'ready'); this.publish();
+    this.trace(requestId, `Next track ready: ${title}.`, `Decode ${Math.round(this.clock.now() - started)} ms.`, 'ready'); this.publish();
     if (!window.sourcePlaybackId) void this.commitColdStart(window, 'Agent choice prepared.');
   }
   private async commitColdStart(window: Window, reason: string) {
@@ -282,7 +286,7 @@ export class AutopilotController {
     const plan = window.chosen?.prepared ? window.chosen : window.fallback;
     if (!plan?.prepared) return;
     const epoch = this.epoch; window.committed = true; this.phase = 'transitioning'; this.line = `Starting ${this.tracks().find(t => t.id === plan.trackId)?.title || plan.trackId}.`; this.publish();
-    if (plan.fallback) this.trace(window.id, `Local fallback: ${reason}`, `Starting ${plan.trackId}.`, 'scheduled');
+    if (plan.fallback) this.trace(window.id, `Starting ${this.tracks().find(t => t.id === plan.trackId)?.title || plan.trackId} automatically.`, `Reason: ${reason} Track ID: ${plan.trackId}.`, 'scheduled');
     const result = await this.engine.commitStart(plan.trackId);
     if (this.epoch !== epoch || this.mode !== 'running') return;
     if (!result.ok) { this.unavailable.add(plan.trackId); window.committed = false; window.chosen = null; window.fallback = null; void this.prepareFallback(window); this.trace(window.id, 'Starting track failed.', result.message, 'failed'); }
@@ -304,14 +308,14 @@ export class AutopilotController {
     if (this.requestId && now >= window.deadline) this.failRequest(window, this.epoch, this.requestId, 'Preparation deadline passed.');
     if (!window.committed && window.fade >= 1 && now >= window.desired - COMMIT_LEAD) {
       const plan = window.chosen?.prepared ? window.chosen : window.fallback;
-      if (!plan?.prepared) { this.line = 'Next track is not ready. Current audio continues if possible.'; this.publish(); return; }
+      if (!plan?.prepared) { this.line = 'Preparing the next track while the music plays.'; this.publish(); return; }
       window.committed = true; this.clearRequest();
       const targetDuration = this.engine.getTrackAnalysis?.(plan.trackId)?.durationSeconds.value ?? Infinity;
       const targetAnalysis = this.engine.getTrackAnalysis?.(plan.trackId) || null;
       const offset = incomingCueOffset(plan.trackId, targetDuration, targetAnalysis, this.tracks().find(t => t.id === plan.trackId)?.loop ?? true);
       const result = this.engine.commitTransition({ type: 'transition', track_id: plan.trackId, style: plan.style, duration_seconds: plan.duration }, Math.max(now + 0.01, window.desired), offset);
-      if (result.ok) { this.phase = 'transitioning'; this.line = `Moving into ${this.tracks().find(t => t.id === plan.trackId)?.title || plan.trackId}.`; this.trace(window.id, `${plan.fallback ? 'Local fallback' : 'Agent move'} scheduled: ${plan.trackId}.`, JSON.stringify({ plan, targetAudioTime: window.desired }), 'scheduled'); }
-      else { window.committed = false; if (plan === window.chosen && window.fallback?.prepared) { window.chosen = null; this.trace(window.id, 'Agent move failed; trying local fallback.', result.message, 'failed'); } else { this.pause(`Transition failed: ${result.message}`); } }
+      if (result.ok) { this.phase = 'transitioning'; this.line = `Moving into ${this.tracks().find(t => t.id === plan.trackId)?.title || plan.trackId}.`; this.trace(window.id, `${plan.fallback ? 'Automatic transition' : 'Next transition'}: ${this.tracks().find(t => t.id === plan.trackId)?.title || plan.trackId}.`, JSON.stringify({ plan, targetAudioTime: window.desired }), 'scheduled'); }
+      else { window.committed = false; if (plan === window.chosen && window.fallback?.prepared) { window.chosen = null; this.trace(window.id, 'Keeping the music going.', `Chosen transition could not start: ${result.message}; automatic selection continues.`, 'fallback'); } else { this.pause(`Transition failed: ${result.message}`); } }
       this.publish();
     }
     if (this.getStatus().secondsUntilNext !== null && Math.floor(now * 2) !== Math.floor((now - 0.1) * 2)) this.publish();

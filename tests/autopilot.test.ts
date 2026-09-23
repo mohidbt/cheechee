@@ -64,8 +64,13 @@ describe('Autopilot controller', () => {
   it('commits a prepared fallback after decision timeout without another model request', async () => {
     const h = harness(); h.state.decks.A = { ...h.state.decks.A, trackId: 'a', playbackId: 'source', status: 'playing', loop: true, duration: 12 };
     h.controller.setChangeInterval(60); h.controller.enable(); await flush(); h.advance(35); expect(h.requests).toHaveLength(1);
-    h.advance(10); expect(h.cancellations).toBe(1);
-    h.advance(14.9); expect(h.transitions).toEqual(['b']); expect(h.requests).toHaveLength(1);
+    h.advance(10); expect(h.cancellations).toBe(0);
+    h.advance(2); expect(h.cancellations).toBe(1);
+    h.advance(12.9); expect(h.transitions).toEqual(['b']); expect(h.requests).toHaveLength(1);
+    expect(h.events).toContain('Next track ready: B.');
+    expect(h.events).toContain('Keeping the music going.');
+    expect(h.events).toContain('Automatic transition: B.');
+    expect(h.events.some(event => event.includes('timed out') || event.includes('Local fallback'))).toBe(false);
     h.controller.dispose();
   });
   it('moves the planning window when wait is accepted and rejects a second wait', async () => {
@@ -138,8 +143,31 @@ describe('user-selected change interval', () => {
     expect(h.requests).toHaveLength(1);
     expect(h.requests[0].request.desiredInSeconds).toBeCloseTo(20);
     expect(h.requests[0].request.context.requestedChangeIntervalSeconds).toBe(20);
-    h.advance(10); expect(h.cancellations).toBe(1);
-    h.advance(9.9); expect(h.transitions).toEqual(['b']); expect(h.requests).toHaveLength(1);
+    h.advance(10); expect(h.cancellations).toBe(0);
+    h.advance(2); expect(h.cancellations).toBe(1);
+    h.advance(7.9); expect(h.transitions).toEqual(['b']); expect(h.requests).toHaveLength(1);
+    h.controller.dispose();
+  });
+  it('accepts a late response before the preparation deadline and rejects one after it', async () => {
+    const before = harness(); before.state.decks.A = { ...before.state.decks.A, trackId: 'a', playbackId: 'source', status: 'playing', loop: true, duration: 12, playedSeconds: 4, position: 4 };
+    before.controller.enable(); await flush();
+    expect(before.requests[0].request.desiredInSeconds).toBeCloseTo(16);
+    expect(before.requests[0].request.hardDeadlineInSeconds).toBeCloseTo(11);
+    before.advance(10.5); expect(before.cancellations).toBe(0);
+    expect(await before.requests[0].decide(reply(before.requests[0], { type: 'transition', track_id: 'b', style: 'crossfade', duration_seconds: 4, explanation: 'Move at the planned time.' }))).toMatchObject({ accepted: true });
+    before.controller.dispose();
+
+    const after = harness(); after.state.decks.A = { ...after.state.decks.A, trackId: 'a', playbackId: 'source', status: 'playing', loop: true, duration: 12, playedSeconds: 4, position: 4 };
+    after.controller.enable(); await flush(); after.advance(11);
+    expect(after.cancellations).toBe(1);
+    expect(await after.requests[0].decide(reply(after.requests[0], { type: 'transition', track_id: 'b', style: 'crossfade', duration_seconds: 4, explanation: 'Too late.' }))).toMatchObject({ accepted: false });
+    after.advance(4.9); expect(after.transitions).toEqual(['b']); expect(after.requests).toHaveLength(1);
+    after.controller.dispose();
+  });
+  it('keeps a cold-start response window bounded at twelve seconds', async () => {
+    const h = harness(); h.controller.enable(); await flush();
+    h.advance(10.5); expect(h.cancellations).toBe(0);
+    h.advance(1.5); expect(h.cancellations).toBe(1);
     h.controller.dispose();
   });
   it('allows a longer pace and invalidates a previous decision when changed during playback', async () => {
@@ -177,7 +205,7 @@ describe('temporary agent unavailability', () => {
     h.state.decks.A = { ...h.state.decks.A, trackId: 'a', playbackId: 'source', status: 'playing', loop: true, duration: 12 };
     h.controller.enable(); await flush();
     expect(h.requests).toHaveLength(0);
-    expect(h.events.filter(event => event.includes('Waiting for the agent'))).toHaveLength(1);
+    expect(h.events.filter(event => event === 'Preparing the next track.')).toHaveLength(1);
     h.advance(0.2); expect(h.requests).toHaveLength(0);
     h.setTransportAvailable(true); h.advance(0.1);
     expect(h.requests).toHaveLength(1);

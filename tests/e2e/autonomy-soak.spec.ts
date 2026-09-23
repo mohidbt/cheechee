@@ -40,7 +40,7 @@ test('ten minute live Autopilot set through the browser audio engine', async ({p
         try { const latency = JSON.parse(trace.detail || '{}').modelLatencyMs; if (typeof latency === 'number') stats.modelLatenciesMs.push(latency); } catch { /* malformed trace detail is already visible in Actions */ }
       }
       if (trace.text.startsWith('Agent move scheduled:')) stats.agentMovesScheduled++;
-      if (trace.text.startsWith('Local fallback scheduled:') && trace.status === 'scheduled') stats.fallbacks++;
+      if (trace.text.startsWith('Automatic transition:') && trace.status === 'scheduled') stats.fallbacks++;
       if (trace.status === 'failed') stats.errors.push(trace.text);
     });
     engine.subscribeLifecycle(event => {
