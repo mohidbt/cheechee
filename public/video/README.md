@@ -1,5 +1,5 @@
 # Performance clips
 
-These clips were supplied by the project owner from `~/Downloads/clips` on 2026-09-23. The app uses only the 18 clips listed in `src/video/clips.ts`. The poster is a frame from `idle_hype.mp4`.
+The DJ footage on the stage. `src/video/clips.ts` maps each audio action to a clip.
 
-The web copies were re-encoded from the supplied files to H.264 at 1280 × 712, 24 frames per second, with no audio stream and fast-start metadata. The source files in `~/Downloads/clips` were left untouched. Action clips still run for 5.04 seconds; load and swap clips run for 10.04 seconds. The 18 web videos total about 3.5 MiB. The browser plays them muted. `idle.mp4` loops when no deck is playing; `idle_hype.mp4` loops between actions while music plays.
+H.264, 1280 × 712, 24 fps, muted, fast-start. Action clips run about 5 s, load and swap clips about 10 s. `idle.mp4` loops when nothing plays, `idle_hype.mp4` loops between actions while music plays. The poster is a frame from `idle_hype.mp4`.

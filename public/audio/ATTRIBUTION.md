@@ -1,3 +1,8 @@
 # Bundled audio
 
-`play-house-edm-or-something.mp3`, `play-house-im-running-away.mp3`, `play-house-the-power-of-the-beat.mp3`, and `play-house-random-drop.mp3` were supplied by the project owner from `~/Downloads` on 2026-09-23. The original files were left untouched. No license or tempo metadata is asserted here.
+Four tracks by [Play House](https://freemusicarchive.org/music/play-house/), from the Free Music Archive under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). No credit is legally required, but the artist asks for it, so here it is. Thanks, Play House!
+
+- `play-house-edm-or-something.mp3`
+- `play-house-im-running-away.mp3` ([source](https://freemusicarchive.org/music/play-house/single/im-running-away/))
+- `play-house-random-drop.mp3`
+- `play-house-the-power-of-the-beat.mp3`
